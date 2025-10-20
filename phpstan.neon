@@ -1,0 +1,20 @@
+parameters:
+    level: 8
+    paths:
+        - src/
+    ignoreErrors:
+        # WordPress core function stubs
+        - '#Function [a-zA-Z_]+\(\) not found\.#'
+        - '#Constant [A-Z_]+ not found\.#'
+        # WordPress globals
+        - '#Undefined variable: \$wpdb#'
+        # WordPress hook parameters
+        - '#Parameter .* of function .* expects .*, .* given\.#'
+    scanDirectories:
+        - vendor/
+    scanFiles:
+        - perfbase.php
+    bootstrapFiles:
+        - tests/bootstrap.php
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false

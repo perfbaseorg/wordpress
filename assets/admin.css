@@ -1,0 +1,129 @@
+/**
+ * Perfbase WordPress Plugin Admin Styles
+ */
+
+.perfbase-info {
+    margin-top: 20px;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.perfbase-info h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.perfbase-info table {
+    margin-top: 15px;
+}
+
+.perfbase-info th {
+    width: 200px;
+    text-align: left;
+    font-weight: 600;
+    padding: 8px 12px;
+}
+
+.perfbase-info td {
+    padding: 8px 12px;
+}
+
+.perfbase-section {
+    margin-bottom: 20px;
+}
+
+.perfbase-field-group {
+    margin-bottom: 15px;
+}
+
+.perfbase-field-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.perfbase-field-group .description {
+    margin-top: 5px;
+    font-style: italic;
+    color: #666;
+}
+
+.perfbase-status-active {
+    color: #00a32a;
+    font-weight: 600;
+}
+
+.perfbase-status-inactive {
+    color: #d63638;
+    font-weight: 600;
+}
+
+.perfbase-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 15px 0;
+}
+
+.perfbase-warning .dashicons {
+    color: #856404;
+    margin-right: 8px;
+}
+
+.perfbase-flags fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.perfbase-flags label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: normal;
+}
+
+.perfbase-flags input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.perfbase-textarea-large {
+    width: 100%;
+    max-width: 600px;
+}
+
+/* WordPress admin compatibility */
+.perfbase-admin-page .form-table th {
+    width: 200px;
+}
+
+.perfbase-admin-page .form-table td {
+    padding-left: 20px;
+}
+
+.perfbase-admin-page .form-table .description {
+    margin-top: 5px;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+    .perfbase-info th,
+    .perfbase-info td {
+        display: block;
+        width: auto;
+        padding: 8px 0;
+    }
+
+    .perfbase-info th {
+        border-bottom: none;
+        font-weight: 600;
+    }
+
+    .perfbase-info td {
+        border-bottom: 1px solid #e5e5e5;
+        margin-bottom: 10px;
+    }
+}

@@ -1,0 +1,12 @@
+{
+  "redefinable-internals": [
+    "memory_get_peak_usage",
+    "memory_get_usage",
+    "http_response_code",
+    "gethostname",
+    "error_log",
+    "function_exists",
+    "phpversion",
+    "class_exists"
+  ]
+}

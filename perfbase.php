@@ -1,0 +1,151 @@
+<?php
+/**
+ * Plugin Name: Perfbase
+ * Plugin URI: https://perfbase.com
+ * Description: WordPress integration for the Perfbase APM platform. Provides comprehensive performance monitoring and profiling for WordPress applications.
+ * Version: 1.0.0
+ * Requires at least: 5.0
+ * Requires PHP: 7.4
+ * Author: Perfbase Team
+ * Author URI: https://perfbase.com
+ * License: Apache-2.0
+ * License URI: https://opensource.org/licenses/Apache-2.0
+ * Text Domain: perfbase
+ * Domain Path: /languages
+ * Network: true
+ *
+ * @package Perfbase\WordPress
+ */
+
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+// Define plugin constants
+define('PERFBASE_PLUGIN_FILE', __FILE__);
+define('PERFBASE_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('PERFBASE_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('PERFBASE_PLUGIN_VERSION', '1.0.0');
+define('PERFBASE_MIN_PHP_VERSION', '7.4');
+define('PERFBASE_MIN_WP_VERSION', '5.0');
+
+// Check PHP version compatibility
+if (version_compare(PHP_VERSION, PERFBASE_MIN_PHP_VERSION, '<')) {
+    add_action('admin_notices', function() {
+        echo '<div class="notice notice-error"><p>';
+        echo sprintf(
+            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
+            PERFBASE_MIN_PHP_VERSION,
+            PHP_VERSION
+        );
+        echo '</p></div>';
+    });
+    return;
+}
+
+// Check WordPress version compatibility
+if (version_compare($GLOBALS['wp_version'], PERFBASE_MIN_WP_VERSION, '<')) {
+    add_action('admin_notices', function() {
+        echo '<div class="notice notice-error"><p>';
+        echo sprintf(
+            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
+            PERFBASE_MIN_WP_VERSION,
+            $GLOBALS['wp_version']
+        );
+        echo '</p></div>';
+    });
+    return;
+}
+
+// Load Composer autoloader if available
+$autoloader = PERFBASE_PLUGIN_DIR . 'vendor/autoload.php';
+if (file_exists($autoloader)) {
+    require_once $autoloader;
+}
+
+// Include the main plugin class
+require_once PERFBASE_PLUGIN_DIR . 'src/PerfbasePlugin.php';
+
+/**
+ * Initialize the plugin
+ *
+ * @return void
+ */
+function perfbase_init() {
+    try {
+        $plugin = new Perfbase\WordPress\PerfbasePlugin();
+        $plugin->init();
+    } catch (Exception $e) {
+        add_action('admin_notices', function() use ($e) {
+            echo '<div class="notice notice-error"><p>';
+            echo sprintf(
+                esc_html__('Perfbase initialization failed: %s', 'perfbase'),
+                esc_html($e->getMessage())
+            );
+            echo '</p></div>';
+        });
+    }
+}
+
+// Initialize the plugin
+add_action('plugins_loaded', 'perfbase_init');
+
+/**
+ * Plugin activation hook
+ */
+function perfbase_activate() {
+    // Check system requirements during activation
+    if (version_compare(PHP_VERSION, PERFBASE_MIN_PHP_VERSION, '<')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die(sprintf(
+            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
+            PERFBASE_MIN_PHP_VERSION,
+            PHP_VERSION
+        ));
+    }
+
+    if (version_compare($GLOBALS['wp_version'], PERFBASE_MIN_WP_VERSION, '<')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die(sprintf(
+            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
+            PERFBASE_MIN_WP_VERSION,
+            $GLOBALS['wp_version']
+        ));
+    }
+
+    // Create default options
+    add_option('perfbase_settings', [
+        'enabled' => false,
+        'api_key' => '',
+        'sample_rate' => 0.1,
+        'flags' => 0,
+        'timeout' => 10,
+        'proxy' => '',
+    ]);
+
+    // Flush rewrite rules
+    flush_rewrite_rules();
+}
+register_activation_hook(__FILE__, 'perfbase_activate');
+
+/**
+ * Plugin deactivation hook
+ */
+function perfbase_deactivate() {
+    // Flush rewrite rules
+    flush_rewrite_rules();
+}
+register_deactivation_hook(__FILE__, 'perfbase_deactivate');
+
+/**
+ * Plugin uninstall hook
+ */
+function perfbase_uninstall() {
+    // Remove plugin options
+    delete_option('perfbase_settings');
+
+    // Clean up any cached data
+    wp_cache_delete('perfbase_config');
+}
+register_uninstall_hook(__FILE__, 'perfbase_uninstall');

@@ -1,0 +1,64 @@
+{
+  "name": "perfbase/wordpress",
+  "description": "WordPress integration for the Perfbase APM platform",
+  "keywords": [
+    "Perfbase",
+    "wordpress",
+    "profiling",
+    "apm",
+    "monitoring"
+  ],
+  "homepage": "https://github.com/perfbaseorg/wordpress",
+  "support": {
+    "issues": "https://github.com/perfbaseorg/wordpress/issues",
+    "source": "https://github.com/perfbaseorg/wordpress"
+  },
+  "type": "wordpress-plugin",
+  "license": "Apache-2.0",
+  "authors": [
+    {
+      "name": "Ben Poulson",
+      "email": "ben.poulson@perfbase.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4 <8.5",
+    "ext-json": "*",
+    "perfbase/php-sdk": "^0.3.0"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "mockery/mockery": "^1.6",
+    "phpunit/phpunit": "^9",
+    "wp-coding-standards/wpcs": "^3.0",
+    "brain/monkey": "^2.6",
+    "10up/wp_mock": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Perfbase\\WordPress\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Perfbase\\WordPress\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "lint": "composer run-script phpstan && composer run-script phpcs",
+    "phpstan": "phpstan analyse --memory-limit=2G",
+    "phpcs": "phpcs --standard=WordPress src/",
+    "test": "phpunit"
+  },
+  "extra": {
+    "wordpress-install-dir": "wp-content/plugins/perfbase"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  }
+}
