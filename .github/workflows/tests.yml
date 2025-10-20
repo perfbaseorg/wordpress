@@ -40,7 +40,7 @@ jobs:
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Install Perfbase
-        run: bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
+        run: bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)" -- --dev
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-suggest
