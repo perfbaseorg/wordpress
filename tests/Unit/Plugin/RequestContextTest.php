@@ -274,7 +274,8 @@ class RequestContextTest extends BaseWordPressTest
 
         $url = $this->request_context->getCurrentUrl();
 
-        $this->assertEquals('http://example.com/test-page/?param=value', $url);
+        // getCurrentUrl() now strips query strings
+        $this->assertEquals('http://example.com/test-page/', $url);
     }
 
     public function testGetCurrentUrlHttps()
@@ -303,12 +304,12 @@ class RequestContextTest extends BaseWordPressTest
 
     public function testShouldProfileRequestBasicLogic()
     {
-        // Test the basic logic with a simple config to avoid constant issues
+        // Test the basic logic with a simple config
         $config = [
             'profile_admin' => true,
-            'profile_cli' => true,
-            'excluded_paths' => [],
-            'excluded_user_agents' => []
+            'include' => ['http' => ['*']],
+            'exclude' => ['http' => []],
+            'exclude_user_agents' => []
         ];
 
         $_SERVER['REQUEST_URI'] = '/simple-page/';
@@ -323,24 +324,26 @@ class RequestContextTest extends BaseWordPressTest
 
     public function testShouldProfileRequestCli()
     {
+        // WP_CLI check is now handled by CliLifecycle, not shouldProfileRequest().
+        // shouldProfileRequest() only checks admin, path filters, and user agents.
         $config = TestData::getValidConfig();
-        $config['profile_cli'] = false;
 
-        if (!defined('WP_CLI')) {
-            define('WP_CLI', true);
-        }
+        $_SERVER['REQUEST_URI'] = '/';
+        $_SERVER['HTTP_USER_AGENT'] = 'WP-CLI';
 
         Functions\when('is_admin')->justReturn(false);
 
         $result = $this->request_context->shouldProfileRequest($config);
 
-        $this->assertFalse($result);
+        // Should return true because shouldProfileRequest no longer checks WP_CLI
+        $this->assertTrue($result);
     }
 
     public function testShouldProfileRequestExcludedPath()
     {
         $config = TestData::getValidConfig();
-        $_SERVER['REQUEST_URI'] = '/wp-admin/admin-ajax.php?action=test';
+        // Use a path that matches the new exclude.http patterns (glob-based)
+        $_SERVER['REQUEST_URI'] = '/wp-content/uploads/2023/image.jpg';
         $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 Test Browser';
 
         Functions\when('is_admin')->justReturn(false);
@@ -353,6 +356,7 @@ class RequestContextTest extends BaseWordPressTest
     public function testShouldProfileRequestExcludedUserAgent()
     {
         $config = TestData::getValidConfig();
+        // Config now uses 'exclude_user_agents' key with substring matching
         $_SERVER['REQUEST_URI'] = '/test-page/';
         $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (compatible; Googlebot/2.1)';
 
@@ -360,17 +364,18 @@ class RequestContextTest extends BaseWordPressTest
 
         $result = $this->request_context->shouldProfileRequest($config);
 
+        // "bot" in exclude_user_agents matches "Googlebot"
         $this->assertFalse($result);
     }
 
     public function testShouldProfileRequestSimpleExclusion()
     {
-        // Test path exclusion logic
+        // Test path exclusion logic with new FilterMatcher-based config
         $config = [
             'profile_admin' => true,
-            'profile_cli' => true,
-            'excluded_paths' => ['/exclude-me/'],
-            'excluded_user_agents' => []
+            'include' => ['http' => ['*']],
+            'exclude' => ['http' => ['/exclude-me/*']],
+            'exclude_user_agents' => []
         ];
 
         $_SERVER['REQUEST_URI'] = '/exclude-me/test.php';
@@ -404,8 +409,8 @@ class RequestContextTest extends BaseWordPressTest
 
         // Action should NOT include query parameters
         $this->assertEquals('POST /wp-cron.php', $attributes['action']);
-        // But full URL should still have them
-        $this->assertStringContainsString('doing_wp_cron=', $attributes['http_url']);
+        // http_url also strips query strings now (getCurrentUrl strips them)
+        $this->assertEquals('http://example.com/wp-cron.php', $attributes['http_url']);
     }
 
     public function testGetRequestAttributesExtractsAjaxAction()

@@ -3,8 +3,17 @@
 namespace Perfbase\WordPress\Tests\Functional;
 
 use Brain\Monkey\Functions;
+use Mockery;
+use Perfbase\SDK\FeatureFlags;
+use Perfbase\SDK\SubmitResult;
+use Perfbase\WordPress\Lifecycle\AjaxRequestLifecycle;
+use Perfbase\WordPress\Lifecycle\CronLifecycle;
+use Perfbase\WordPress\Lifecycle\HttpRequestLifecycle;
 use Perfbase\WordPress\PerfbasePlugin;
+use Perfbase\WordPress\Helpers\ConfigManager;
+use Perfbase\WordPress\Helpers\RequestContext;
 use Perfbase\WordPress\Tests\Helpers\BaseWordPressTest;
+use Perfbase\WordPress\Tests\Helpers\MockFactory;
 use Perfbase\WordPress\Tests\Helpers\TestData;
 
 /**
@@ -12,319 +21,249 @@ use Perfbase\WordPress\Tests\Helpers\TestData;
  */
 class FullRequestCycleTest extends BaseWordPressTest
 {
+    private $mock_config_manager;
+    private $mock_request_context;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->mock_config_manager = Mockery::mock(ConfigManager::class);
+        $this->mock_request_context = Mockery::mock(RequestContext::class);
+    }
+
+    /**
+     * Helper to create a plugin with mock SDK ready for lifecycle tests.
+     */
+    private function createPluginWithMockSdk(array $configOverrides = []): array
+    {
+        $plugin = new PerfbasePlugin(
+            $this->mock_config_manager,
+            $this->mock_request_context
+        );
+
+        $config = array_merge(TestData::getValidConfig(), ['sample_rate' => 1.0], $configOverrides);
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase->shouldReceive('isExtensionAvailable')->byDefault()->andReturn(true);
+        $mock_perfbase->shouldReceive('startTraceSpan')->zeroOrMoreTimes();
+        $mock_perfbase->shouldReceive('setAttribute')->zeroOrMoreTimes();
+        $mock_perfbase->shouldReceive('stopTraceSpan')->zeroOrMoreTimes()->andReturn(true);
+        $mock_perfbase->shouldReceive('submitTrace')->zeroOrMoreTimes()->andReturn(SubmitResult::success());
+
+        $this->setPrivateProperty($plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($plugin, 'config', $config);
+
+        return [$plugin, $mock_perfbase];
+    }
+
     public function testCompleteWordPressFrontendRequest()
     {
-        $config = TestData::getValidConfig();
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
 
-        // Set up a typical frontend request
-        $this->mockFrontendEnvironment();
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([
+                'http.method' => 'GET',
+                'http.url' => 'https://example.com/',
+                'action' => 'GET /',
+            ]);
 
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
-        Functions\when('is_front_page')->justReturn(true);
-        Functions\when('is_home')->justReturn(true);
-        Functions\when('get_page_template_slug')->justReturn('');
+        $this->mock_request_context
+            ->shouldReceive('getTemplateContext')
+            ->andReturn(['wordpress.template' => 'front-page.php']);
 
-        $mock_theme = (object) [];
-        $mock_theme->get = function($key) {
-            return $key === 'Name' ? 'Twenty Twenty-One' : '1.3';
-        };
-        Functions\when('wp_get_theme')->justReturn($mock_theme);
+        $this->mock_request_context
+            ->shouldReceive('getWordPressContext')
+            ->andReturn(['wordpress.is_front_page' => 'true']);
 
-        // Mock final request stats
-        Functions\when('memory_get_peak_usage')->justReturn(5242880); // 5MB
-        Functions\when('memory_get_usage')->justReturn(3145728); // 3MB
-        Functions\when('get_num_queries')->justReturn(8);
-        Functions\when('http_response_code')->justReturn(200);
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->andReturn(['http_status_code' => '200']);
 
-        // Initialize plugin and run complete lifecycle
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
+        // Full lifecycle: init -> template_redirect -> database/http -> shutdown
+        $plugin->on_init();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $plugin->get_active_lifecycle());
 
-        // Simulate WordPress request lifecycle
-        do_action('init');
-        $plugin->start_request_profiling();
+        $plugin->on_template_redirect();
 
-        do_action('wp_loaded');
-        $plugin->wp_loaded_profiling();
+        // Simulate database query and HTTP request hooks
+        $plugin->on_database_query('SELECT * FROM wp_posts WHERE post_status = "publish"');
+        $plugin->on_http_request(null, [], 'https://api.example.com/data');
 
-        do_action('template_redirect');
-        $plugin->template_redirect_profiling();
-
-        // Simulate some database queries and HTTP requests
-        $plugin->profile_database_query('SELECT * FROM wp_posts WHERE post_status = "publish"');
-        $plugin->profile_http_request(null, [], 'https://api.example.com/data');
-
-        do_action('wp_head');
-        do_action('wp_footer');
-
-        do_action('shutdown');
-        $plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $plugin->on_shutdown();
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 
     public function testCompleteAdminRequest()
     {
-        $config = TestData::getValidConfig();
-        $config['profile_admin'] = true;
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk(['profile_admin' => true]);
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.admin');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
 
-        // Set up admin request
-        $this->mockAdminEnvironment();
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/wp-admin/options-general.php?page=perfbase-settings',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([
+                'http.method' => 'GET',
+                'http.url' => 'https://example.com/wp-admin/options-general.php?page=perfbase-settings',
+                'action' => 'GET /wp-admin/options-general.php',
+            ]);
 
-        Functions\when('is_ssl')->justReturn(true);
-        Functions\when('get_bloginfo')->justReturn('6.0');
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->andReturn(['http_status_code' => '200']);
 
-        // Mock admin-specific functions
-        Functions\when('admin_url')->alias(function($path = '') {
-            return 'https://example.com/wp-admin/' . $path;
-        });
+        $plugin->on_init();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $plugin->get_active_lifecycle());
 
-        // Mock final request stats
-        Functions\when('memory_get_peak_usage')->justReturn(8388608); // 8MB
-        Functions\when('memory_get_usage')->justReturn(6291456); // 6MB
-        Functions\when('get_num_queries')->justReturn(15);
-        Functions\when('http_response_code')->justReturn(200);
-
-        // Initialize plugin and run admin lifecycle
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
-
-        // Start profiling
-        $plugin->start_request_profiling();
-
-        // Simulate admin page load
-        $plugin->wp_loaded_profiling();
-
-        // Finish profiling
-        $plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $plugin->on_shutdown();
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 
     public function testAjaxRequestCycle()
     {
-        $config = TestData::getValidConfig();
-
-        Functions\when('get_option')
-            ->justReturn($config);
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        // Set up AJAX request
-        $this->mockAjaxEnvironment();
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'POST',
-            'REQUEST_URI' => '/wp-admin/admin-ajax.php',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
-
-        $_POST['action'] = 'load_more_posts';
         $_REQUEST['action'] = 'load_more_posts';
 
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk();
 
-        // Mock AJAX response stats
-        Functions\when('memory_get_peak_usage')->justReturn(2097152); // 2MB
-        Functions\when('memory_get_usage')->justReturn(1572864); // 1.5MB
-        Functions\when('get_num_queries')->justReturn(3);
-        Functions\when('http_response_code')->justReturn(200);
+        // Context detection now happens in on_init() via createLifecycleForContext().
+        // Since constants can't be set at runtime, create lifecycle directly.
+        $lifecycle = new AjaxRequestLifecycle('load_more_posts', $plugin);
+        $this->setPrivateProperty($plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
 
-        // Initialize plugin
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
+        $this->assertInstanceOf(AjaxRequestLifecycle::class, $plugin->get_active_lifecycle());
+        $this->assertEquals('ajax.load_more_posts', $plugin->get_active_lifecycle()->getSpanName());
 
-        // Start AJAX profiling
-        $plugin->start_ajax_profiling();
-
-        // Simulate AJAX processing
-        $plugin->wp_loaded_profiling();
-
-        // Finish profiling
-        $plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $plugin->on_shutdown();
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 
     public function testCronJobCycle()
     {
-        $config = TestData::getValidConfig();
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        // Context detection now happens in on_init() via createLifecycleForContext().
+        // Since constants can't be set at runtime, create lifecycle directly.
+        $lifecycle = new CronLifecycle($plugin);
+        $this->setPrivateProperty($plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->assertInstanceOf(CronLifecycle::class, $plugin->get_active_lifecycle());
+        $this->assertEquals('cron.execution', $plugin->get_active_lifecycle()->getSpanName());
 
-        // Set up cron environment
-        $this->mockCronEnvironment();
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/wp-cron.php',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'WordPress/6.0; https://example.com'
-        ]);
-
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
-
-        // Mock cron job stats
-        Functions\when('memory_get_peak_usage')->justReturn(4194304); // 4MB
-        Functions\when('memory_get_usage')->justReturn(3145728); // 3MB
-        Functions\when('get_num_queries')->justReturn(12);
-        Functions\when('http_response_code')->justReturn(200);
-
-        // Initialize plugin
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
-
-        // Start cron profiling
-        $plugin->start_cron_profiling();
-
-        // Simulate cron job execution
-        $plugin->wp_loaded_profiling();
-
-        // Finish profiling
-        $plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $plugin->on_shutdown();
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 
     public function testRequestWithWooCommerce()
     {
-        $config = TestData::getValidConfig();
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
 
-        // Set up WooCommerce shop page
-        $this->mockFrontendEnvironment();
-        $this->mockWooCommerce();
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([
+                'http.method' => 'GET',
+                'http.url' => 'https://example.com/shop/',
+                'action' => 'GET /shop/',
+            ]);
 
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/shop/',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
+        $this->mock_request_context
+            ->shouldReceive('getTemplateContext')
+            ->andReturn(['wordpress.template' => 'archive-product.php']);
 
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
-        Functions\when('is_shop')->justReturn(true);
-        Functions\when('is_product')->justReturn(false);
-        Functions\when('is_cart')->justReturn(false);
-        Functions\when('is_checkout')->justReturn(false);
-        Functions\when('is_account_page')->justReturn(false);
+        $this->mock_request_context
+            ->shouldReceive('getWordPressContext')
+            ->andReturn(['woocommerce.page' => 'shop']);
 
-        // Mock final request stats
-        Functions\when('memory_get_peak_usage')->justReturn(10485760); // 10MB
-        Functions\when('memory_get_usage')->justReturn(8388608); // 8MB
-        Functions\when('get_num_queries')->justReturn(25);
-        Functions\when('http_response_code')->justReturn(200);
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->andReturn(['http_status_code' => '200']);
 
-        // Initialize plugin
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
+        $plugin->on_init();
+        $plugin->on_template_redirect();
+        $plugin->on_shutdown();
 
-        // Run complete lifecycle with WooCommerce
-        $plugin->start_request_profiling();
-        $plugin->wp_loaded_profiling();
-        $plugin->template_redirect_profiling();
-        $plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 
     public function testHighVolumeRequest()
     {
-        $config = TestData::getValidConfig();
+        [$plugin, $mock_perfbase] = $this->createPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
 
-        // Disable WooCommerce for this test to avoid WC() function call
-        Functions\when('class_exists')->justReturn(false);
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([
+                'http.method' => 'GET',
+                'http.url' => 'https://example.com/category/popular/',
+                'action' => 'GET /category/popular/',
+            ]);
 
-        // Set up high-volume request scenario
-        $this->mockFrontendEnvironment();
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/category/popular/',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        ]);
+        $this->mock_request_context
+            ->shouldReceive('getTemplateContext')
+            ->andReturn([]);
 
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
-        Functions\when('is_category')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('getWordPressContext')
+            ->andReturn(['wordpress.is_category' => 'true']);
 
-        $mock_term = (object) [
-            'term_id' => 5,
-            'taxonomy' => 'category',
-            'slug' => 'popular'
-        ];
-        Functions\when('get_queried_object')->justReturn($mock_term);
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->andReturn(['http_status_code' => '200']);
 
-        // Simulate high resource usage
-        Functions\when('memory_get_peak_usage')->justReturn(52428800); // 50MB
-        Functions\when('memory_get_usage')->justReturn(41943040); // 40MB
-        Functions\when('get_num_queries')->justReturn(150); // Many queries
-        Functions\when('http_response_code')->justReturn(200);
+        $plugin->on_init();
 
-        // Initialize plugin
-        $plugin = new PerfbasePlugin();
-        $plugin->init();
-
-        // Multiple database queries to simulate complex page
+        // Simulate multiple database queries
         $queries = [
             'SELECT * FROM wp_posts WHERE post_status = "publish" ORDER BY post_date DESC LIMIT 20',
             'SELECT * FROM wp_postmeta WHERE post_id IN (1,2,3,4,5)',
             'SELECT * FROM wp_terms WHERE term_id = 5',
             'SELECT * FROM wp_options WHERE autoload = "yes"',
-            'SELECT COUNT(*) FROM wp_posts WHERE post_type = "post"'
+            'SELECT COUNT(*) FROM wp_posts WHERE post_type = "post"',
         ];
 
-        $plugin->start_request_profiling();
-
         foreach ($queries as $query) {
-            $plugin->profile_database_query($query);
+            $result = $plugin->on_database_query($query);
+            $this->assertEquals($query, $result);
         }
 
         // Simulate external API calls
-        $plugin->profile_http_request(null, [], 'https://api.analytics.example.com/track');
-        $plugin->profile_http_request(null, [], 'https://cdn.example.com/assets/script.js');
+        $plugin->on_http_request(null, [], 'https://api.analytics.example.com/track');
+        $plugin->on_http_request(null, [], 'https://cdn.example.com/assets/script.js');
 
-        $plugin->wp_loaded_profiling();
-        $plugin->template_redirect_profiling();
-        $plugin->finish_request_profiling();
+        $plugin->on_template_redirect();
+        $plugin->on_shutdown();
 
-        $this->assertTrue(true);
+        $this->assertNull($plugin->get_active_lifecycle());
     }
 }

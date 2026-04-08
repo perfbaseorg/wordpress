@@ -73,7 +73,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $input = [
             'enabled' => '1',
             'api_key' => 'test-key-123',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'sample_rate' => '0.5',
             'timeout' => '15',
             'proxy' => '',
@@ -93,7 +93,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertTrue($result['enabled']);
         $this->assertEquals('test-key-123', $result['api_key']);
-        $this->assertEquals('https://receiver.perfbase.com', $result['api_url']);
+        $this->assertEquals('https://ingress.perfbase.cloud', $result['api_url']);
         $this->assertEquals(0.5, $result['sample_rate']);
         $this->assertEquals(15, $result['timeout']);
         $this->assertTrue($result['profile_admin']);
@@ -149,7 +149,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertFalse($result['enabled']);
         $this->assertEquals('', $result['api_key']);
-        $this->assertEquals('https://receiver.perfbase.com', $result['api_url']);
+        $this->assertEquals('https://ingress.perfbase.cloud', $result['api_url']);
         $this->assertEquals(0.1, $result['sample_rate']);
         $this->assertEquals(10, $result['timeout']);
     }

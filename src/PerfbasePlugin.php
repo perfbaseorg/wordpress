@@ -12,12 +12,21 @@ use Perfbase\SDK\FeatureFlags;
 use Perfbase\SDK\Perfbase;
 use Perfbase\WordPress\Helpers\ConfigManager;
 use Perfbase\WordPress\Helpers\RequestContext;
-use Perfbase\WordPress\Helpers\SamplingStrategy;
+use Perfbase\WordPress\Lifecycle\AbstractWordPressProfiler;
+use Perfbase\WordPress\Lifecycle\AjaxRequestLifecycle;
+use Perfbase\WordPress\Lifecycle\CliLifecycle;
+use Perfbase\WordPress\Lifecycle\CronLifecycle;
+use Perfbase\WordPress\Lifecycle\HttpRequestLifecycle;
+use Perfbase\WordPress\Support\ErrorHandler;
 
 /**
- * Main plugin class that handles WordPress integration
+ * Main plugin class that orchestrates WordPress integration.
+ *
+ * This class is the thin adapter layer — it creates lifecycle instances
+ * for each request context and delegates profiling to them.
  */
 class PerfbasePlugin {
+    use ErrorHandler;
 
     /**
      * Plugin version
@@ -34,16 +43,16 @@ class PerfbasePlugin {
     /**
      * Plugin configuration
      *
-     * @var array
+     * @var array<string, mixed>
      */
-    private $config;
+    private $config = [];
 
     /**
-     * Active profiling spans
+     * The active lifecycle instance for the current request.
      *
-     * @var array
+     * @var AbstractWordPressProfiler|null
      */
-    private $active_spans = [];
+    private $active_lifecycle;
 
     /**
      * Admin interface handler
@@ -53,7 +62,7 @@ class PerfbasePlugin {
     private $admin;
 
     /**
-     * Profiler instance
+     * Profiler instance (WordPress hook-based attribute collection)
      *
      * @var PerfbaseProfiler|null
      */
@@ -74,27 +83,17 @@ class PerfbasePlugin {
     private $request_context;
 
     /**
-     * Sampling strategy
-     *
-     * @var SamplingStrategy
-     */
-    private $sampling_strategy;
-
-    /**
      * Constructor with dependency injection
      *
      * @param ConfigManager|null $config_manager
      * @param RequestContext|null $request_context
-     * @param SamplingStrategy|null $sampling_strategy
      */
     public function __construct(
         ?ConfigManager $config_manager = null,
-        ?RequestContext $request_context = null,
-        ?SamplingStrategy $sampling_strategy = null
+        ?RequestContext $request_context = null
     ) {
         $this->config_manager = $config_manager ?? new ConfigManager();
         $this->request_context = $request_context ?? new RequestContext();
-        $this->sampling_strategy = $sampling_strategy ?? new SamplingStrategy();
     }
 
     /**
@@ -102,26 +101,18 @@ class PerfbasePlugin {
      *
      * @return void
      */
-    public function init() {
-        // Load configuration
+    public function init(): void
+    {
         $this->load_config();
-
-        // Always initialize admin interface (needed for configuration)
         $this->init_admin();
-
-        // Load text domain
         $this->load_textdomain();
 
-        // Early return if not enabled
         if (!$this->is_enabled()) {
             return;
         }
 
-        // Initialize profiling components
         $this->init_perfbase_sdk();
         $this->init_profiler();
-
-        // Register hooks
         $this->register_hooks();
     }
 
@@ -130,7 +121,8 @@ class PerfbasePlugin {
      *
      * @return void
      */
-    private function load_config() {
+    private function load_config(): void
+    {
         $this->config = $this->config_manager->getConfig();
     }
 
@@ -139,17 +131,20 @@ class PerfbasePlugin {
      *
      * @return bool
      */
-    private function is_enabled() {
+    private function is_enabled(): bool
+    {
         return $this->config_manager->isEnabled($this->config);
     }
 
     /**
-     * Initialize the Perfbase SDK
+     * Initialize the Perfbase SDK.
+     *
+     * Degrades gracefully if the extension is unavailable.
      *
      * @return void
-     * @throws \Exception
      */
-    private function init_perfbase_sdk() {
+    private function init_perfbase_sdk(): void
+    {
         try {
             $config = Config::fromArray([
                 'api_key' => $this->config['api_key'],
@@ -161,8 +156,8 @@ class PerfbasePlugin {
 
             $this->perfbase = new Perfbase($config);
         } catch (\Exception $e) {
-            error_log('Perfbase SDK initialization failed: ' . $e->getMessage());
-            throw $e;
+            // $this->perfbase remains null — lifecycle classes check for it.
+            $this->handleProfilingError($e, $this->config, 'sdk_init');
         }
     }
 
@@ -171,7 +166,8 @@ class PerfbasePlugin {
      *
      * @return void
      */
-    private function init_admin() {
+    private function init_admin(): void
+    {
         if (is_admin()) {
             require_once PERFBASE_PLUGIN_DIR . 'src/PerfbaseAdmin.php';
             $this->admin = new PerfbaseAdmin($this);
@@ -179,58 +175,183 @@ class PerfbasePlugin {
     }
 
     /**
-     * Initialize profiler
+     * Initialize profiler (WordPress hook-based attribute collection)
      *
      * @return void
      */
-    private function init_profiler() {
+    private function init_profiler(): void
+    {
         require_once PERFBASE_PLUGIN_DIR . 'src/PerfbaseProfiler.php';
         $this->profiler = new PerfbaseProfiler($this);
     }
 
     /**
-     * Register WordPress hooks
+     * Register WordPress hooks for profiling lifecycle.
+     *
+     * Context detection happens in on_init() — we register one entry point
+     * and detect AJAX/cron/CLI there, rather than relying on wildcard hooks
+     * that WordPress does not support.
      *
      * @return void
      */
-    private function register_hooks() {
-        // Core profiling hooks
-        add_action('init', [$this, 'start_request_profiling'], -999);
-        add_action('wp_loaded', [$this, 'wp_loaded_profiling']);
-        add_action('shutdown', [$this, 'finish_request_profiling'], 999);
+    private function register_hooks(): void
+    {
+        // Single entry point — detects context and creates the right lifecycle
+        add_action('init', [$this, 'on_init'], -999);
+        add_action('template_redirect', [$this, 'on_template_redirect']);
+        add_action('shutdown', [$this, 'on_shutdown'], 999);
 
-        // Template hooks
-        add_action('template_redirect', [$this, 'template_redirect_profiling']);
-
-        // AJAX hooks
-        if ($this->config['profile_ajax']) {
-            add_action('wp_ajax_nopriv_*', [$this, 'start_ajax_profiling'], -999);
-            add_action('wp_ajax_*', [$this, 'start_ajax_profiling'], -999);
+        // Attribute collection hooks (lightweight, set directly on SDK)
+        if (($this->config['flags'] & FeatureFlags::TrackPdo) !== 0) {
+            add_filter('query', [$this, 'on_database_query'], 10, 1);
         }
-
-        // Cron hooks
-        if ($this->config['profile_cron']) {
-            add_action('wp_cron', [$this, 'start_cron_profiling'], -999);
-        }
-
-        // Database query profiling
-        if ($this->should_profile_queries()) {
-            add_filter('query', [$this, 'profile_database_query'], 10, 1);
-        }
-
-        // HTTP request profiling
-        add_filter('pre_http_request', [$this, 'profile_http_request'], 10, 3);
-
-        // Error handling
-        add_action('wp_die_handler', [$this, 'handle_wp_die']);
+        add_filter('pre_http_request', [$this, 'on_http_request'], 10, 3);
+        add_filter('wp_die_handler', [$this, 'on_wp_die']);
     }
+
+    // ------------------------------------------------------------------
+    // Hook handlers — create and manage lifecycle instances
+    // ------------------------------------------------------------------
+
+    /**
+     * Main profiling entry point (init hook, priority -999).
+     *
+     * Detects the request context and creates the appropriate lifecycle.
+     * WordPress doesn't support wildcard hook registration, so we detect
+     * AJAX/cron/CLI here rather than registering separate hooks.
+     *
+     * @return void
+     */
+    public function on_init(): void
+    {
+        $lifecycle = $this->createLifecycleForContext();
+        $lifecycle->startProfiling();
+        $this->active_lifecycle = $lifecycle;
+    }
+
+    /**
+     * Add WordPress template/theme context (template_redirect hook).
+     *
+     * @return void
+     */
+    public function on_template_redirect(): void
+    {
+        if ($this->active_lifecycle instanceof HttpRequestLifecycle) {
+            $this->active_lifecycle->addWordPressContext();
+        }
+    }
+
+    /**
+     * Finish profiling and submit (shutdown hook, priority 999).
+     *
+     * @return void
+     */
+    public function on_shutdown(): void
+    {
+        if (!$this->active_lifecycle) {
+            return;
+        }
+
+        try {
+            if ($this->active_lifecycle instanceof HttpRequestLifecycle) {
+                $this->active_lifecycle->addFinalAttributes();
+            }
+
+            $this->active_lifecycle->stopProfiling();
+        } catch (\Throwable $e) {
+            $this->handleProfilingError($e, $this->config, 'shutdown');
+        }
+
+        $this->active_lifecycle = null;
+    }
+
+    /**
+     * Detect the current WordPress context and create the appropriate lifecycle.
+     *
+     * @return AbstractWordPressProfiler
+     */
+    private function createLifecycleForContext(): AbstractWordPressProfiler
+    {
+        // AJAX requests (detected via DOING_AJAX constant)
+        if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
+            $action = $_REQUEST['action'] ?? 'unknown';
+            return new AjaxRequestLifecycle($action, $this);
+        }
+
+        // Cron requests (detected via DOING_CRON constant)
+        if (defined('DOING_CRON') && DOING_CRON && !empty($this->config['profile_cron'])) {
+            return new CronLifecycle($this);
+        }
+
+        // WP-CLI requests (detected via WP_CLI constant)
+        if (defined('WP_CLI') && WP_CLI && !empty($this->config['profile_cli'])) {
+            $command = $_SERVER['argv'][1] ?? 'unknown';
+            return new CliLifecycle($command, $this);
+        }
+
+        // Default: standard HTTP request
+        return new HttpRequestLifecycle($this, $this->request_context);
+    }
+
+    // ------------------------------------------------------------------
+    // Attribute collection hooks (lightweight — set on SDK directly)
+    // ------------------------------------------------------------------
+
+    /**
+     * Profile database query.
+     *
+     * @param string $query
+     * @return string
+     */
+    public function on_database_query(string $query): string
+    {
+        if ($this->perfbase) {
+            $this->perfbase->setAttribute('database.last_query', substr($query, 0, 100));
+        }
+        return $query;
+    }
+
+    /**
+     * Profile HTTP request.
+     *
+     * @param mixed $preempt
+     * @param mixed $args
+     * @param string $url
+     * @return mixed
+     */
+    public function on_http_request($preempt, $args, string $url)
+    {
+        if ($this->perfbase && ($this->config['flags'] & FeatureFlags::TrackHttp)) {
+            $this->perfbase->setAttribute('http.external_request', $url);
+        }
+        return $preempt;
+    }
+
+    /**
+     * Handle wp_die.
+     *
+     * @param callable $handler
+     * @return callable
+     */
+    public function on_wp_die(callable $handler): callable
+    {
+        if ($this->perfbase) {
+            $this->perfbase->setAttribute('wordpress.wp_die', 'true');
+        }
+        return $handler;
+    }
+
+    // ------------------------------------------------------------------
+    // Textdomain
+    // ------------------------------------------------------------------
 
     /**
      * Load plugin text domain
      *
      * @return void
      */
-    private function load_textdomain() {
+    private function load_textdomain(): void
+    {
         load_plugin_textdomain(
             'perfbase',
             false,
@@ -238,194 +359,17 @@ class PerfbasePlugin {
         );
     }
 
-    /**
-     * Start profiling for the current request
-     *
-     * @return void
-     */
-    public function start_request_profiling() {
-        if (!$this->request_context->shouldProfileRequest($this->config)) {
-            return;
-        }
-
-        $span_name = $this->request_context->getSpanName();
-        $attributes = $this->request_context->getRequestAttributes();
-
-        try {
-            $this->perfbase->startTraceSpan($span_name, $attributes);
-            $this->active_spans[] = $span_name;
-        } catch (\Exception $e) {
-            error_log('Failed to start Perfbase profiling: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Profile wp_loaded hook
-     *
-     * @return void
-     */
-    public function wp_loaded_profiling() {
-        if ($this->perfbase && !empty($this->active_spans)) {
-            $this->perfbase->setAttribute('wp_loaded', 'true');
-        }
-    }
-
-    /**
-     * Profile template_redirect hook
-     *
-     * @return void
-     */
-    public function template_redirect_profiling() {
-        if ($this->perfbase && !empty($this->active_spans)) {
-            $template_context = $this->request_context->getTemplateContext();
-            foreach ($template_context as $key => $value) {
-                $this->perfbase->setAttribute($key, $value);
-            }
-
-            $wordpress_context = $this->request_context->getWordPressContext();
-            foreach ($wordpress_context as $key => $value) {
-                $this->perfbase->setAttribute($key, $value);
-            }
-        }
-    }
-
-    /**
-     * Finish profiling for the current request
-     *
-     * @return void
-     */
-    public function finish_request_profiling() {
-        if (!$this->perfbase || empty($this->active_spans)) {
-            return;
-        }
-
-        try {
-            // Add final attributes
-            $final_attributes = $this->request_context->getFinalAttributes();
-            foreach ($final_attributes as $key => $value) {
-                $this->perfbase->setAttribute($key, $value);
-            }
-
-            // Stop all active spans
-            foreach ($this->active_spans as $span_name) {
-                $this->perfbase->stopTraceSpan($span_name);
-            }
-
-            // Submit trace if we should sample this request
-            if ($this->sampling_strategy->getSamplingDecision($this->config)) {
-                $this->perfbase->submitTrace();
-            }
-
-            $this->active_spans = [];
-        } catch (\Exception $e) {
-            error_log('Failed to finish Perfbase profiling: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Start AJAX profiling
-     *
-     * @return void
-     */
-    public function start_ajax_profiling() {
-        $action = $_REQUEST['action'] ?? 'unknown';
-        $span_name = "ajax.{$action}";
-
-        $attributes = [
-            'request.type' => 'ajax',
-            'ajax.action' => $action,
-        ];
-
-        try {
-            $this->perfbase->startTraceSpan($span_name, $attributes);
-            $this->active_spans[] = $span_name;
-        } catch (\Exception $e) {
-            error_log('Failed to start AJAX profiling: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Start cron profiling
-     *
-     * @return void
-     */
-    public function start_cron_profiling() {
-        $span_name = 'cron.execution';
-
-        $attributes = [
-            'request.type' => 'cron',
-        ];
-
-        try {
-            $this->perfbase->startTraceSpan($span_name, $attributes);
-            $this->active_spans[] = $span_name;
-        } catch (\Exception $e) {
-            error_log('Failed to start cron profiling: ' . $e->getMessage());
-        }
-    }
-
-
-    /**
-     * Check if database queries should be profiled
-     *
-     * @return bool
-     */
-    private function should_profile_queries() {
-        return ($this->config['flags'] & FeatureFlags::TrackPdo) !== 0;
-    }
-
-    /**
-     * Profile database query
-     *
-     * @param string $query
-     * @return string
-     */
-    public function profile_database_query($query) {
-        // This is a simplified implementation
-        // In a full implementation, you'd want to measure query execution time
-        if ($this->perfbase) {
-            $this->perfbase->setAttribute('database.last_query', substr($query, 0, 100));
-        }
-
-        return $query;
-    }
-
-    /**
-     * Profile HTTP request
-     *
-     * @param mixed $preempt
-     * @param array $args
-     * @param string $url
-     * @return mixed
-     */
-    public function profile_http_request($preempt, $args, $url) {
-        if ($this->perfbase && ($this->config['flags'] & FeatureFlags::TrackHttp)) {
-            $this->perfbase->setAttribute('http.external_request', $url);
-        }
-
-        return $preempt;
-    }
-
-    /**
-     * Handle wp_die
-     *
-     * @param callable $handler
-     * @return callable
-     */
-    public function handle_wp_die($handler) {
-        if ($this->perfbase) {
-            $this->perfbase->setAttribute('wordpress.wp_die', 'true');
-        }
-
-        return $handler;
-    }
+    // ------------------------------------------------------------------
+    // Getters and setters
+    // ------------------------------------------------------------------
 
     /**
      * Get plugin configuration
      *
-     * @return array
+     * @return array<string, mixed>
      */
-    public function get_config() {
+    public function get_config(): array
+    {
         return $this->config;
     }
 
@@ -434,17 +378,29 @@ class PerfbasePlugin {
      *
      * @return Perfbase|null
      */
-    public function get_perfbase() {
+    public function get_perfbase(): ?Perfbase
+    {
         return $this->perfbase;
+    }
+
+    /**
+     * Get the active lifecycle instance (for testing).
+     *
+     * @return AbstractWordPressProfiler|null
+     */
+    public function get_active_lifecycle(): ?AbstractWordPressProfiler
+    {
+        return $this->active_lifecycle;
     }
 
     /**
      * Update plugin configuration
      *
-     * @param array $new_config
+     * @param array<string, mixed> $new_config
      * @return bool
      */
-    public function update_config($new_config) {
+    public function update_config(array $new_config): bool
+    {
         $this->config = array_merge($this->config, $new_config);
         return $this->config_manager->updateConfig($this->config);
     }

@@ -24,7 +24,7 @@
   "require": {
     "php": ">=7.4 <8.5",
     "ext-json": "*",
-    "perfbase/php-sdk": "^0.3.0"
+    "perfbase/php-sdk": "1.0.0"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",

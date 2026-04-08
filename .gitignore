@@ -1,8 +1,16 @@
 vendor/
 .idea/
 .vscode/
+.claude/
 .DS_Store
 *.log
 *.env
 *.cache
 *.sqlite
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+coverage.xml
+composer.lock
+AGENTS.md
+CLAUDE.md

@@ -6,6 +6,7 @@ use Mockery;
 use Perfbase\SDK\Config;
 use Perfbase\SDK\Extension\ExtensionInterface;
 use Perfbase\SDK\Perfbase;
+use Perfbase\SDK\SubmitResult;
 
 /**
  * Factory for creating test mocks
@@ -27,7 +28,7 @@ class MockFactory
             'startTraceSpan' => true,
             'stopTraceSpan' => true,
             'setAttribute' => true,
-            'submitTrace' => true,
+            'submitTrace' => SubmitResult::success(),
             'reset' => true,
             'getTraceData' => '{}',
             'isExtensionAvailable' => true
@@ -60,7 +61,7 @@ class MockFactory
 
         $defaults = [
             'api_key' => 'test-api-key',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'flags' => 0,
             'timeout' => 10,
             'proxy' => null
@@ -138,7 +139,7 @@ class MockFactory
         $defaults = [
             'enabled' => true,
             'api_key' => 'test-api-key',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'sample_rate' => 1.0,
             'flags' => 0,
             'timeout' => 10,
@@ -147,16 +148,28 @@ class MockFactory
             'profile_ajax' => true,
             'profile_cron' => true,
             'profile_cli' => false,
-            'excluded_paths' => [
-                '/wp-admin/admin-ajax.php',
-                '/wp-content/uploads/',
-                '/favicon.ico'
+            'include' => [
+                'http' => ['*'],
+                'ajax' => ['*'],
+                'cron' => ['*'],
+                'cli' => ['*'],
             ],
-            'excluded_user_agents' => [
+            'exclude' => [
+                'http' => [
+                    '/wp-content/uploads/*',
+                    '/favicon.ico',
+                ],
+                'ajax' => [],
+                'cron' => [],
+                'cli' => [],
+            ],
+            'exclude_user_agents' => [
                 'bot',
                 'crawler',
                 'spider'
-            ]
+            ],
+            'debug' => false,
+            'log_errors' => true
         ];
 
         return array_merge($defaults, $overrides);

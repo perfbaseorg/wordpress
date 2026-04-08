@@ -37,13 +37,16 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertArrayHasKey('profile_ajax', $default_config);
         $this->assertArrayHasKey('profile_cron', $default_config);
         $this->assertArrayHasKey('profile_cli', $default_config);
-        $this->assertArrayHasKey('excluded_paths', $default_config);
-        $this->assertArrayHasKey('excluded_user_agents', $default_config);
+        $this->assertArrayHasKey('include', $default_config);
+        $this->assertArrayHasKey('exclude', $default_config);
+        $this->assertArrayHasKey('exclude_user_agents', $default_config);
+        $this->assertArrayHasKey('debug', $default_config);
+        $this->assertArrayHasKey('log_errors', $default_config);
 
         // Test default values
         $this->assertFalse($default_config['enabled']);
         $this->assertEquals('', $default_config['api_key']);
-        $this->assertEquals('https://receiver.perfbase.com', $default_config['api_url']);
+        $this->assertEquals('https://ingress.perfbase.cloud', $default_config['api_url']);
         $this->assertEquals(0.1, $default_config['sample_rate']);
         $this->assertEquals(FeatureFlags::DefaultFlags, $default_config['flags']);
         $this->assertEquals(10, $default_config['timeout']);
@@ -52,8 +55,13 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertTrue($default_config['profile_ajax']);
         $this->assertTrue($default_config['profile_cron']);
         $this->assertFalse($default_config['profile_cli']);
-        $this->assertIsArray($default_config['excluded_paths']);
-        $this->assertIsArray($default_config['excluded_user_agents']);
+        $this->assertFalse($default_config['debug']);
+        $this->assertTrue($default_config['log_errors']);
+        $this->assertIsArray($default_config['include']);
+        $this->assertIsArray($default_config['exclude']);
+        $this->assertIsArray($default_config['exclude_user_agents']);
+        $this->assertEquals(['*'], $default_config['include']['http']);
+        $this->assertContains('/favicon.ico', $default_config['exclude']['http']);
     }
 
     public function testGetConfigWithDefaults()
@@ -84,7 +92,7 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertEquals('test-key-123', $config['api_key']);
         $this->assertEquals(0.5, $config['sample_rate']);
         // Should still have defaults for other values
-        $this->assertEquals('https://receiver.perfbase.com', $config['api_url']);
+        $this->assertEquals('https://ingress.perfbase.cloud', $config['api_url']);
     }
 
     public function testUpdateConfig()
@@ -260,6 +268,49 @@ class ConfigManagerTest extends BaseWordPressTest
         $config['sample_rate'] = 1.0;
         $errors = $this->config_manager->validateConfig($config);
         $this->assertArrayNotHasKey('sample_rate', $errors);
+    }
+
+    public function testApplyConstantsOverridesConfig()
+    {
+        // PERFBASE_ENABLED is already potentially defined, so test with a fresh approach.
+        // applyConstants() is private, so we test through getConfig().
+        // Define a constant that isn't already defined.
+        if (!defined('PERFBASE_TIMEOUT')) {
+            define('PERFBASE_TIMEOUT', 42);
+        }
+
+        Functions\when('get_option')->justReturn([]);
+
+        $config = $this->config_manager->getConfig();
+
+        // The constant should override the default
+        $this->assertEquals(42, $config['timeout']);
+    }
+
+    public function testGetDefaultConfigHasNewKeys()
+    {
+        $defaults = $this->config_manager->getDefaultConfig();
+
+        // Verify new config shape
+        $this->assertArrayHasKey('include', $defaults);
+        $this->assertArrayHasKey('exclude', $defaults);
+        $this->assertArrayHasKey('exclude_user_agents', $defaults);
+        $this->assertArrayHasKey('debug', $defaults);
+        $this->assertArrayHasKey('log_errors', $defaults);
+
+        // Verify nested structure
+        $this->assertArrayHasKey('http', $defaults['include']);
+        $this->assertArrayHasKey('ajax', $defaults['include']);
+        $this->assertArrayHasKey('cron', $defaults['include']);
+        $this->assertArrayHasKey('cli', $defaults['include']);
+
+        $this->assertArrayHasKey('http', $defaults['exclude']);
+        $this->assertContains('/wp-content/uploads/*', $defaults['exclude']['http']);
+        $this->assertContains('/favicon.ico', $defaults['exclude']['http']);
+
+        // Verify old keys no longer present
+        $this->assertArrayNotHasKey('excluded_paths', $defaults);
+        $this->assertArrayNotHasKey('excluded_user_agents', $defaults);
     }
 
     public function testValidateConfigWithValidFlagsBoundaries()

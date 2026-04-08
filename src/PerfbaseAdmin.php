@@ -418,7 +418,7 @@ class PerfbaseAdmin {
      */
     public function render_api_url_field() {
         $config = $this->plugin->get_config();
-        $value = $config['api_url'] ?? 'https://receiver.perfbase.com';
+        $value = $config['api_url'] ?? 'https://ingress.perfbase.cloud';
         ?>
         <input type="url" name="perfbase_settings[api_url]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
         <p class="description">
@@ -588,7 +588,7 @@ class PerfbaseAdmin {
         // Basic fields
         $sanitized['enabled'] = !empty($input['enabled']);
         $sanitized['api_key'] = sanitize_text_field($input['api_key'] ?? '');
-        $sanitized['api_url'] = esc_url_raw($input['api_url'] ?? 'https://receiver.perfbase.com');
+        $sanitized['api_url'] = esc_url_raw($input['api_url'] ?? 'https://ingress.perfbase.cloud');
         $sanitized['sample_rate'] = max(0, min(1, (float) ($input['sample_rate'] ?? 0.1)));
         $sanitized['timeout'] = max(1, min(60, (int) ($input['timeout'] ?? 10)));
         $sanitized['proxy'] = sanitize_text_field($input['proxy'] ?? '');

@@ -34,7 +34,7 @@ class EdgeCaseTest extends BaseWordPressTest
             ->andReturn([
                 'enabled' => true,
                 'api_key' => 'test-key-123',
-                'api_url' => 'https://receiver.perfbase.com',
+                'api_url' => 'https://ingress.perfbase.cloud',
                 'sample_rate' => 0.5,
                 'timeout' => 10,
                 'proxy' => '',
@@ -53,7 +53,7 @@ class EdgeCaseTest extends BaseWordPressTest
         Functions\when('get_option')->justReturn([
             'enabled' => true,
             'api_key' => 'test-key-123',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'sample_rate' => 0.5,
             'timeout' => 10,
             'proxy' => '',
@@ -73,14 +73,14 @@ class EdgeCaseTest extends BaseWordPressTest
     {
         Functions\when('get_option')->alias(function($key) {
             if ($key === 'perfbase_settings') {
-                return ['enabled' => true, 'api_key' => '', 'api_url' => 'https://receiver.perfbase.com'];
+                return ['enabled' => true, 'api_key' => '', 'api_url' => 'https://ingress.perfbase.cloud'];
             }
             return false;
         });
 
         $mock_config_manager = Mockery::mock(\Perfbase\WordPress\Helpers\ConfigManager::class);
         $mock_config_manager->shouldReceive('get')
-            ->andReturn(['enabled' => true, 'api_key' => '', 'api_url' => 'https://receiver.perfbase.com']);
+            ->andReturn(['enabled' => true, 'api_key' => '', 'api_url' => 'https://ingress.perfbase.cloud']);
 
         $plugin = new PerfbasePlugin($mock_config_manager);
 

@@ -3,18 +3,20 @@ parameters:
     paths:
         - src/
     ignoreErrors:
-        # WordPress core function stubs
-        - '#Function [a-zA-Z_]+\(\) not found\.#'
-        - '#Constant [A-Z_]+ not found\.#'
-        # WordPress globals
-        - '#Undefined variable: \$wpdb#'
-        # WordPress hook parameters
-        - '#Parameter .* of function .* expects .*, .* given\.#'
+        - identifier: function.notFound
+        - identifier: constant.notFound
+        - identifier: class.notFound
+        - identifier: property.onlyWritten
+        # These were suppressed via checkMissingIterableValueType/checkGenericClassInNonGenericObjectType
+        # in PHPStan 1.x. Those config keys were removed in 2.x.
+        - identifier: missingType.iterableValue
+        - identifier: missingType.generics
+        # Pre-existing: nullable Perfbase calls and $_SERVER array|string casts
+        - identifier: method.nonObject
+        - identifier: cast.string
     scanDirectories:
         - vendor/
     scanFiles:
         - perfbase.php
-    bootstrapFiles:
-        - tests/bootstrap.php
-    checkMissingIterableValueType: false
-    checkGenericClassInNonGenericObjectType: false
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false

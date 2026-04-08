@@ -329,7 +329,11 @@ class RequestContext
     }
 
     /**
-     * Get the current URL
+     * Get the current URL without query string.
+     *
+     * Query parameters are excluded to avoid leaking sensitive values
+     * (nonces, tokens, session IDs). Important WordPress query params
+     * are extracted as separate attributes via addImportantQueryParams().
      *
      * @return string
      */
@@ -339,40 +343,60 @@ class RequestContext
         $host = $_SERVER['HTTP_HOST'] ?? '';
         $uri = $_SERVER['REQUEST_URI'] ?? '';
 
-        return $protocol . $host . $uri;
+        // Strip query string to avoid leaking sensitive params
+        $path = parse_url($uri, PHP_URL_PATH) ?: $uri;
+
+        return $protocol . $host . $path;
     }
 
     /**
-     * Check if the current request should be profiled based on context
+     * Check if the current request should be profiled based on context.
      *
-     * @param array $config
+     * Uses FilterMatcher for include/exclude pattern matching against the
+     * request path, and checks user agent exclusions.
+     *
+     * @param array<string, mixed> $config
      * @return bool
      */
     public function shouldProfileRequest(array $config): bool
     {
         // Skip if in admin area (unless enabled)
-        if (is_admin() && !$config['profile_admin']) {
+        if (is_admin() && empty($config['profile_admin'])) {
             return false;
         }
 
-        // Skip if CLI (unless enabled)
-        if (defined('WP_CLI') && WP_CLI && !$config['profile_cli']) {
-            return false;
-        }
+        // Check path-based include/exclude filters
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+        $path = parse_url($requestUri, PHP_URL_PATH) ?: $requestUri;
+        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-        // Check excluded paths
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
-        foreach ($config['excluded_paths'] as $excluded_path) {
-            if (strpos($request_uri, $excluded_path) !== false) {
+        $components = [
+            $path,
+            sprintf('%s %s', $method, $path),
+        ];
+
+        $include = $config['include'] ?? [];
+        $exclude = $config['exclude'] ?? [];
+
+        if (!empty($include) && !empty($exclude)) {
+            if (!\Perfbase\WordPress\Support\FilterMatcher::passesFilters(
+                $components,
+                is_array($include) ? $include : [],
+                is_array($exclude) ? $exclude : [],
+                'http'
+            )) {
                 return false;
             }
         }
 
         // Check excluded user agents
-        $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-        foreach ($config['excluded_user_agents'] as $excluded_agent) {
-            if (stripos($user_agent, $excluded_agent) !== false) {
-                return false;
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $excludeAgents = $config['exclude_user_agents'] ?? [];
+        if (is_array($excludeAgents)) {
+            foreach ($excludeAgents as $excludedAgent) {
+                if (is_string($excludedAgent) && stripos($userAgent, $excludedAgent) !== false) {
+                    return false;
+                }
             }
         }
 

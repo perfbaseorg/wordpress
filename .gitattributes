@@ -1,0 +1,11 @@
+/.claude export-ignore
+/.github export-ignore
+/.idea export-ignore
+/AGENTS.md export-ignore
+/CLAUDE.md export-ignore
+/coverage export-ignore
+/coverage.xml export-ignore
+/patchwork.json export-ignore
+/phpstan.neon export-ignore
+/phpunit.xml export-ignore
+/tests export-ignore

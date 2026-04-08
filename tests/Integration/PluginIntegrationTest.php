@@ -4,9 +4,14 @@ namespace Perfbase\WordPress\Tests\Integration;
 
 use Brain\Monkey\Functions;
 use Mockery;
-use Perfbase\SDK\Config;
 use Perfbase\SDK\Perfbase;
+use Perfbase\SDK\SubmitResult;
+use Perfbase\WordPress\Lifecycle\AjaxRequestLifecycle;
+use Perfbase\WordPress\Lifecycle\CronLifecycle;
+use Perfbase\WordPress\Lifecycle\HttpRequestLifecycle;
 use Perfbase\WordPress\PerfbasePlugin;
+use Perfbase\WordPress\Helpers\ConfigManager;
+use Perfbase\WordPress\Helpers\RequestContext;
 use Perfbase\WordPress\Tests\Helpers\BaseWordPressTest;
 use Perfbase\WordPress\Tests\Helpers\MockFactory;
 use Perfbase\WordPress\Tests\Helpers\TestData;
@@ -17,153 +22,213 @@ use Perfbase\WordPress\Tests\Helpers\TestData;
 class PluginIntegrationTest extends BaseWordPressTest
 {
     private $plugin;
+    private $mock_config_manager;
+    private $mock_request_context;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->plugin = new PerfbasePlugin();
+
+        $this->mock_config_manager = Mockery::mock(ConfigManager::class);
+        $this->mock_request_context = Mockery::mock(RequestContext::class);
+
+        $this->plugin = new PerfbasePlugin(
+            $this->mock_config_manager,
+            $this->mock_request_context
+        );
+    }
+
+    /**
+     * Helper to set up the plugin with a mock SDK and config for lifecycle tests.
+     */
+    private function setUpPluginWithMockSdk(array $config = [], array $perfbaseMethods = []): Mockery\MockInterface
+    {
+        $config = array_merge(TestData::getValidConfig(), ['sample_rate' => 1.0], $config);
+        $mock_perfbase = MockFactory::createMockPerfbase($perfbaseMethods);
+
+        $mock_perfbase->shouldReceive('isExtensionAvailable')->byDefault()->andReturn(true);
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        return $mock_perfbase;
     }
 
     public function testFullRequestCycleWithProfiling()
     {
-        // Set up configuration
-        $config = TestData::getValidConfig();
+        $mock_perfbase = $this->setUpPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
 
-        // Mock request environment
-        $this->setServerVars([
-            'REQUEST_METHOD' => 'GET',
-            'REQUEST_URI' => '/test-page/',
-            'HTTP_HOST' => 'example.com',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 Test Browser'
-        ]);
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn(['http.method' => 'GET', 'http.url' => 'https://example.com/test-page/']);
 
-        Functions\when('is_admin')->justReturn(false);
-        Functions\when('is_ssl')->justReturn(false);
-        Functions\when('get_bloginfo')->justReturn('6.0');
+        $this->mock_request_context
+            ->shouldReceive('getTemplateContext')
+            ->andReturn(['wordpress.template' => 'page.php']);
 
-        // Initialize plugin
-        $this->plugin->init();
+        $this->mock_request_context
+            ->shouldReceive('getWordPressContext')
+            ->andReturn(['wordpress.is_page' => 'true']);
 
-        // Start profiling
-        $this->plugin->start_request_profiling();
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->andReturn(['http_status_code' => '200']);
 
-        // Simulate WordPress lifecycle
-        $this->plugin->wp_loaded_profiling();
-        $this->plugin->template_redirect_profiling();
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->with('wordpress.request')
+            ->once();
 
-        // Finish profiling
-        Functions\when('memory_get_peak_usage')->justReturn(1024000);
-        Functions\when('memory_get_usage')->justReturn(512000);
-        Functions\when('get_num_queries')->justReturn(5);
-        Functions\when('http_response_code')->justReturn(200);
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
 
-        $this->plugin->finish_request_profiling();
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('wordpress.request')
+            ->once()
+            ->andReturn(true);
 
-        // Test passes if no exceptions thrown
-        $this->assertTrue(true);
+        $mock_perfbase
+            ->shouldReceive('submitTrace')
+            ->once()
+            ->andReturn(SubmitResult::success());
+
+        // Run full lifecycle
+        $this->plugin->on_init();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $this->plugin->get_active_lifecycle());
+
+        $this->plugin->on_template_redirect();
+        $this->plugin->on_shutdown();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
     public function testAjaxRequestProfiling()
     {
-        $config = TestData::getValidConfig();
+        $_REQUEST['action'] = 'test_action';
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $mock_perfbase = $this->setUpPluginWithMockSdk(['profile_ajax' => true]);
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->with('ajax.test_action')
+            ->once();
 
-        MockFactory::mockAjaxRequest('test_action');
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
 
-        Functions\when('is_admin')->justReturn(true);
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('ajax.test_action')
+            ->once()
+            ->andReturn(true);
 
-        $this->plugin->init();
-        $this->plugin->start_ajax_profiling();
+        $mock_perfbase
+            ->shouldReceive('submitTrace')
+            ->once()
+            ->andReturn(SubmitResult::success());
 
-        $this->assertTrue(true);
+        // Context detection now happens in on_init() via createLifecycleForContext().
+        // Since we can't set DOING_AJAX constant at runtime, create lifecycle directly.
+        $lifecycle = new AjaxRequestLifecycle('test_action', $this->plugin);
+        $this->setPrivateProperty($this->plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
+
+        $this->assertInstanceOf(AjaxRequestLifecycle::class, $this->plugin->get_active_lifecycle());
+
+        $this->plugin->on_shutdown();
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
     public function testCronJobProfiling()
     {
-        $config = TestData::getValidConfig();
+        $mock_perfbase = $this->setUpPluginWithMockSdk(['profile_cron' => true]);
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->with('cron.execution')
+            ->once();
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
 
-        $this->mockCronEnvironment();
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('cron.execution')
+            ->once()
+            ->andReturn(true);
 
-        $this->plugin->init();
-        $this->plugin->start_cron_profiling();
+        $mock_perfbase
+            ->shouldReceive('submitTrace')
+            ->once()
+            ->andReturn(SubmitResult::success());
 
-        $this->assertTrue(true);
+        // Context detection now happens in on_init() via createLifecycleForContext().
+        // Since we can't set DOING_CRON constant at runtime, create lifecycle directly.
+        $lifecycle = new CronLifecycle($this->plugin);
+        $this->setPrivateProperty($this->plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
+
+        $this->assertInstanceOf(CronLifecycle::class, $this->plugin->get_active_lifecycle());
+
+        $this->plugin->on_shutdown();
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
     public function testRequestExclusion()
     {
-        $config = TestData::getValidConfig();
+        $mock_perfbase = $this->setUpPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        // Set up excluded request
-        $this->setServerVars([
-            'REQUEST_URI' => '/wp-admin/admin-ajax.php',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 Test Browser'
-        ]);
-
-        Functions\when('is_admin')->justReturn(false);
-
-        $this->plugin->init();
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(false);
 
         // Should not start profiling for excluded path
-        $this->plugin->start_request_profiling();
+        $mock_perfbase
+            ->shouldNotReceive('startTraceSpan');
 
-        $this->assertTrue(true);
-    }
+        $this->plugin->on_init();
 
-    public function testUserAgentExclusion()
-    {
-        $config = TestData::getValidConfig();
-
-        Functions\when('get_option')
-            ->justReturn($config);
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        // Set up bot user agent
-        $this->setServerVars([
-            'REQUEST_URI' => '/test-page/',
-            'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; Googlebot/2.1)'
-        ]);
-
-        Functions\when('is_admin')->justReturn(false);
-
-        $this->plugin->init();
-
-        // Should not start profiling for bot user agent
-        $this->plugin->start_request_profiling();
-
-        $this->assertTrue(true);
+        // Lifecycle is created but profiling was not started
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $this->plugin->get_active_lifecycle());
     }
 
     public function testConfigurationUpdate()
     {
         $initial_config = TestData::getValidConfig();
         $new_settings = ['sample_rate' => 0.5, 'timeout' => 15];
+        $expected_merged = array_merge($initial_config, $new_settings);
 
-        Functions\when('get_option')
-            ->justReturn($initial_config);
+        $this->mock_config_manager
+            ->shouldReceive('getConfig')
+            ->once()
+            ->andReturn($initial_config);
 
-        Functions\when('update_option')
-            ->justReturn(true);
+        $this->mock_config_manager
+            ->shouldReceive('isEnabled')
+            ->once()
+            ->andReturn(false);
+
+        $this->mock_config_manager
+            ->shouldReceive('updateConfig')
+            ->once()
+            ->with($expected_merged)
+            ->andReturn(true);
 
         Functions\when('load_plugin_textdomain')->justReturn(true);
 
@@ -177,108 +242,85 @@ class PluginIntegrationTest extends BaseWordPressTest
         $this->assertEquals(15, $updated_config['timeout']);
     }
 
-    public function testProfilingWithDisabledExtension()
+    public function testProfilingWithNullSdk()
     {
+        // perfbase is null (extension not available, SDK init failed)
         $config = TestData::getValidConfig();
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        // on_init should not throw when perfbase is null
+        $this->plugin->on_init();
 
-        // Mock scenario where extension is not available
-        $mock_perfbase = Mockery::mock(Perfbase::class);
-        $mock_perfbase
-            ->shouldReceive('isExtensionAvailable')
-            ->andReturn(false);
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
 
-        $this->plugin->init();
-
-        // Should handle gracefully when extension is not available
-        $this->plugin->start_request_profiling();
-
-        $this->assertTrue(true);
+        // on_shutdown should not throw when perfbase is null
+        $this->plugin->on_shutdown();
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
     public function testHookRegistration()
     {
         $config = TestData::getValidConfig();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $this->mock_config_manager
+            ->shouldReceive('getConfig')
+            ->once()
+            ->andReturn($config);
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->mock_config_manager
+            ->shouldReceive('isEnabled')
+            ->once()
+            ->andReturn(true);
 
         // Track hook registrations
         $hooks_registered = [];
 
-        Functions\when('add_action')->alias(function($hook, $callback, $priority = 10, $accepted_args = 1) use (&$hooks_registered) {
+        Functions\when('add_action')->alias(function ($hook, $callback, $priority = 10, $accepted_args = 1) use (&$hooks_registered) {
             $hooks_registered[] = $hook;
         });
 
-        Functions\when('add_filter')->alias(function($hook, $callback, $priority = 10, $accepted_args = 1) use (&$hooks_registered) {
+        Functions\when('add_filter')->alias(function ($hook, $callback, $priority = 10, $accepted_args = 1) use (&$hooks_registered) {
             $hooks_registered[] = $hook;
         });
+
+        Functions\when('load_plugin_textdomain')->justReturn(true);
 
         $this->plugin->init();
 
         // Verify that expected hooks were registered
         $this->assertContains('init', $hooks_registered);
-        $this->assertContains('wp_loaded', $hooks_registered);
         $this->assertContains('shutdown', $hooks_registered);
         $this->assertContains('template_redirect', $hooks_registered);
+        $this->assertContains('pre_http_request', $hooks_registered);
+        $this->assertContains('wp_die_handler', $hooks_registered);
     }
 
-    public function testMemoryAndPerformanceTracking()
+    public function testShutdownWithNoLifecycleDoesNothing()
     {
-        $config = TestData::getValidConfig();
+        // No lifecycle set — on_shutdown should exit gracefully
+        $this->plugin->on_shutdown();
 
-        Functions\when('get_option')
-            ->justReturn($config);
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        // Mock memory and performance functions
-        Functions\when('memory_get_peak_usage')->justReturn(2048000);
-        Functions\when('memory_get_usage')->justReturn(1024000);
-        Functions\when('get_num_queries')->justReturn(10);
-        Functions\when('http_response_code')->justReturn(200);
-
-        $this->plugin->init();
-
-        // Simulate request lifecycle
-        $this->plugin->start_request_profiling();
-        $this->plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
-    public function testSamplingBehavior()
+    public function testDatabaseQueryProfilingIntegration()
     {
-        // Test with 100% sampling
-        $config = TestData::getValidConfig();
-        $config['sample_rate'] = 1.0;
+        $mock_perfbase = $this->setUpPluginWithMockSdk();
 
-        Functions\when('get_option')
-            ->justReturn($config);
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('database.last_query', Mockery::any())
+            ->twice();
 
-        Functions\when('load_plugin_textdomain')->justReturn(true);
+        $this->plugin->on_database_query('SELECT * FROM wp_posts WHERE ID = 1');
+        $result = $this->plugin->on_database_query('INSERT INTO wp_postmeta (post_id, meta_key) VALUES (1, "key")');
 
-        $this->plugin->init();
-        $this->plugin->start_request_profiling();
-        $this->plugin->finish_request_profiling();
-
-        // Test with 0% sampling
-        $config['sample_rate'] = 0.0;
-
-        Functions\when('get_option')
-            ->justReturn($config);
-
-        $plugin2 = new PerfbasePlugin();
-        $plugin2->init();
-        $plugin2->start_request_profiling();
-        $plugin2->finish_request_profiling();
-
-        $this->assertTrue(true);
+        // Query should be returned unchanged
+        $this->assertEquals('INSERT INTO wp_postmeta (post_id, meta_key) VALUES (1, "key")', $result);
     }
 }

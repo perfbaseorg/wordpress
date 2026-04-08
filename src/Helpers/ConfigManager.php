@@ -19,7 +19,44 @@ class ConfigManager
         $defaults = $this->getDefaultConfig();
         $saved_settings = get_option('perfbase_settings', []);
 
-        return wp_parse_args($saved_settings, $defaults);
+        // wp_parse_args merges saved settings over defaults
+        $config = wp_parse_args($saved_settings, $defaults);
+
+        // wp-config.php constants override everything (highest priority)
+        $config = $this->applyConstants($config);
+
+        return $config;
+    }
+
+    /**
+     * Apply wp-config.php constants over the merged config.
+     *
+     * Constants take highest priority: defaults < WordPress options < constants.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function applyConstants(array $config): array
+    {
+        $constantMap = [
+            'PERFBASE_ENABLED'     => 'enabled',
+            'PERFBASE_DEBUG'       => 'debug',
+            'PERFBASE_LOG_ERRORS'  => 'log_errors',
+            'PERFBASE_API_KEY'     => 'api_key',
+            'PERFBASE_API_URL'     => 'api_url',
+            'PERFBASE_SAMPLE_RATE' => 'sample_rate',
+            'PERFBASE_FLAGS'       => 'flags',
+            'PERFBASE_TIMEOUT'     => 'timeout',
+            'PERFBASE_PROXY'       => 'proxy',
+        ];
+
+        foreach ($constantMap as $constant => $key) {
+            if (defined($constant)) {
+                $config[$key] = constant($constant);
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -42,8 +79,10 @@ class ConfigManager
     {
         return [
             'enabled' => false,
+            'debug' => false,
+            'log_errors' => true,
             'api_key' => '',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'sample_rate' => 0.1,
             'flags' => FeatureFlags::DefaultFlags,
             'timeout' => 10,
@@ -52,15 +91,25 @@ class ConfigManager
             'profile_ajax' => true,
             'profile_cron' => true,
             'profile_cli' => false,
-            'excluded_paths' => [
-                '/wp-admin/admin-ajax.php',
-                '/wp-content/uploads/',
-                '/favicon.ico'
+            'include' => [
+                'http' => ['*'],
+                'ajax' => ['*'],
+                'cron' => ['*'],
+                'cli' => ['*'],
             ],
-            'excluded_user_agents' => [
+            'exclude' => [
+                'http' => [
+                    '/wp-content/uploads/*',
+                    '/favicon.ico',
+                ],
+                'ajax' => [],
+                'cron' => [],
+                'cli' => [],
+            ],
+            'exclude_user_agents' => [
                 'bot',
                 'crawler',
-                'spider'
+                'spider',
             ]
         ];
     }

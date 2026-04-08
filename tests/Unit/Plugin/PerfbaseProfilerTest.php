@@ -85,6 +85,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->on_wp_ready();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnWpReadyAddsUserContext()
@@ -121,6 +122,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->zeroOrMoreTimes();
 
         $this->profiler->on_wp_ready();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnWpReadyAddsPostContext()
@@ -163,6 +165,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->zeroOrMoreTimes();
 
         $this->profiler->on_wp_ready();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnWpReadyAddsTaxonomyContext()
@@ -205,6 +208,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->zeroOrMoreTimes();
 
         $this->profiler->on_wp_ready();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnTemplateRedirectAddsTemplateInfo()
@@ -233,6 +237,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->on_template_redirect();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnTemplateRedirectAddsConditionalTags()
@@ -260,6 +265,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->zeroOrMoreTimes();
 
         $this->profiler->on_template_redirect();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnWpHeadSetsAttribute()
@@ -270,6 +276,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->on_wp_head();
+        $this->addToAssertionCount(1);
     }
 
     public function testOnWpFooterSetsAttribute()
@@ -280,6 +287,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->on_wp_footer();
+        $this->addToAssertionCount(1);
     }
 
     public function testProfileQueryDetectsSELECT()
@@ -344,6 +352,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->add_database_stats();
+        $this->addToAssertionCount(1);
     }
 
     public function testAddDatabaseStatsWithSlowQueries()
@@ -381,6 +390,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->add_database_stats();
+        $this->addToAssertionCount(1);
     }
 
     public function testProfileThemeSetup()
@@ -391,6 +401,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_theme_setup();
+        $this->addToAssertionCount(1);
     }
 
     public function testProfilePluginsLoaded()
@@ -417,6 +428,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_plugins_loaded();
+        $this->addToAssertionCount(1);
     }
 
     public function testProfilePostSaveInsert()
@@ -437,6 +449,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_post_save(123, $mock_post, false);
+        $this->addToAssertionCount(1);
     }
 
     public function testProfilePostSaveUpdate()
@@ -457,6 +470,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_post_save(456, $mock_post, true);
+        $this->addToAssertionCount(1);
     }
 
     public function testProfileCommentInsert()
@@ -469,6 +483,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_comment_insert(789, $comment);
+        $this->addToAssertionCount(1);
     }
 
     public function testProfileUserLogin()
@@ -481,6 +496,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_user_login('testuser', $mock_user);
+        $this->addToAssertionCount(1);
     }
 
     public function testProfileUserLogout()
@@ -491,36 +507,7 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->once();
 
         $this->profiler->profile_user_logout();
-    }
-
-    public function testProfileCacheOperation()
-    {
-        $this->mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('wordpress.cache.operation', 'set')
-            ->once();
-
-        $this->mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('wordpress.cache.group', 'posts')
-            ->once();
-
-        $this->profiler->profile_cache_operation('data', 'key', 'posts');
-    }
-
-    public function testProfileCacheGet()
-    {
-        $this->mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('wordpress.cache.operation', 'get')
-            ->once();
-
-        $this->mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('wordpress.cache.group', 'options')
-            ->once();
-
-        $this->profiler->profile_cache_get('key', 'options');
+        $this->addToAssertionCount(1);
     }
 
     public function testInitRestProfiling()

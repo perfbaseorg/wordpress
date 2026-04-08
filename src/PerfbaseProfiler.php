@@ -64,10 +64,9 @@ class PerfbaseProfiler {
         add_action('wp_login', [$this, 'profile_user_login'], 10, 2);
         add_action('wp_logout', [$this, 'profile_user_logout']);
 
-        // Cache profiling
-        add_action('wp_cache_add', [$this, 'profile_cache_operation'], 10, 3);
-        add_action('wp_cache_set', [$this, 'profile_cache_operation'], 10, 3);
-        add_action('wp_cache_get', [$this, 'profile_cache_get'], 10, 2);
+        // Note: wp_cache_add/set/get are PHP functions, not WordPress hooks.
+        // Cache profiling is handled by the ext-perfbase extension via TrackCaches flag,
+        // not by hook registration.
 
         // REST API profiling
         add_action('rest_api_init', [$this, 'init_rest_profiling']);
@@ -339,41 +338,6 @@ class PerfbaseProfiler {
         }
 
         $perfbase->setAttribute('wordpress.user.logout', 'true');
-    }
-
-    /**
-     * Profile cache operations
-     *
-     * @param mixed $data
-     * @param string $key
-     * @param string $group
-     * @return void
-     */
-    public function profile_cache_operation($data, $key, $group) {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
-        $perfbase->setAttribute('wordpress.cache.operation', 'set');
-        $perfbase->setAttribute('wordpress.cache.group', $group);
-    }
-
-    /**
-     * Profile cache get operations
-     *
-     * @param string $key
-     * @param string $group
-     * @return void
-     */
-    public function profile_cache_get($key, $group) {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
-        $perfbase->setAttribute('wordpress.cache.operation', 'get');
-        $perfbase->setAttribute('wordpress.cache.group', $group);
     }
 
     /**

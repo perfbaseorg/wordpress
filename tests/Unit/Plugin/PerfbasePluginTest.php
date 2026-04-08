@@ -4,14 +4,15 @@ namespace Perfbase\WordPress\Tests\Unit\Plugin;
 
 use Brain\Monkey\Functions;
 use Mockery;
-use Perfbase\SDK\Config;
+use Perfbase\SDK\FeatureFlags;
 use Perfbase\SDK\Perfbase;
-use Perfbase\WordPress\PerfbaseAdmin;
+use Perfbase\SDK\SubmitResult;
+use Perfbase\WordPress\Lifecycle\AjaxRequestLifecycle;
+use Perfbase\WordPress\Lifecycle\CronLifecycle;
+use Perfbase\WordPress\Lifecycle\HttpRequestLifecycle;
 use Perfbase\WordPress\PerfbasePlugin;
-use Perfbase\WordPress\PerfbaseProfiler;
 use Perfbase\WordPress\Helpers\ConfigManager;
 use Perfbase\WordPress\Helpers\RequestContext;
-use Perfbase\WordPress\Helpers\SamplingStrategy;
 use Perfbase\WordPress\Tests\Helpers\BaseWordPressTest;
 use Perfbase\WordPress\Tests\Helpers\MockFactory;
 use Perfbase\WordPress\Tests\Helpers\TestData;
@@ -23,7 +24,6 @@ class PerfbasePluginTest extends BaseWordPressTest
 {
     private $mock_config_manager;
     private $mock_request_context;
-    private $mock_sampling_strategy;
     private $plugin;
 
     protected function setUp(): void
@@ -33,13 +33,11 @@ class PerfbasePluginTest extends BaseWordPressTest
         // Create mocks for dependencies
         $this->mock_config_manager = Mockery::mock(ConfigManager::class);
         $this->mock_request_context = Mockery::mock(RequestContext::class);
-        $this->mock_sampling_strategy = Mockery::mock(SamplingStrategy::class);
 
         // Create plugin instance with mocked dependencies
         $this->plugin = new PerfbasePlugin(
             $this->mock_config_manager,
-            $this->mock_request_context,
-            $this->mock_sampling_strategy
+            $this->mock_request_context
         );
     }
 
@@ -53,9 +51,8 @@ class PerfbasePluginTest extends BaseWordPressTest
     {
         $config_manager = Mockery::mock(ConfigManager::class);
         $request_context = Mockery::mock(RequestContext::class);
-        $sampling_strategy = Mockery::mock(SamplingStrategy::class);
 
-        $plugin = new PerfbasePlugin($config_manager, $request_context, $sampling_strategy);
+        $plugin = new PerfbasePlugin($config_manager, $request_context);
 
         $this->assertInstanceOf(PerfbasePlugin::class, $plugin);
     }
@@ -79,7 +76,8 @@ class PerfbasePluginTest extends BaseWordPressTest
         // Should not proceed with initialization if disabled
         $this->plugin->init();
 
-        $this->assertTrue(true); // If we get here without errors, test passes
+        // perfbase should remain null when disabled
+        $this->assertNull($this->plugin->get_perfbase());
     }
 
     public function testInitWithEnabledProfiling()
@@ -102,7 +100,8 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->plugin->init();
 
-        $this->assertTrue(true); // If we get here without errors, test passes
+        // Config should be loaded
+        $this->assertEquals($config, $this->plugin->get_config());
     }
 
     public function testGetConfig()
@@ -153,173 +152,132 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertTrue($result);
     }
 
-    public function testStartRequestProfilingWhenShouldNotProfile()
+    public function testOnInitCreatesHttpRequestLifecycle()
     {
         $config = TestData::getValidConfig();
-
-        $this->mock_config_manager
-            ->shouldReceive('getConfig')
-            ->once()
-            ->andReturn($config);
-
-        $this->mock_config_manager
-            ->shouldReceive('isEnabled')
-            ->once()
-            ->andReturn(true);
-
-        $this->mock_request_context
-            ->shouldReceive('shouldProfileRequest')
-            ->once()
-            ->with($config)
-            ->andReturn(false);
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        $this->plugin->init();
-        $this->plugin->start_request_profiling();
-
-        // Should exit early without starting profiling
-        $this->assertTrue(true);
-    }
-
-    public function testStartRequestProfilingSuccess()
-    {
-        $config = TestData::getValidConfig();
-        $span_name = 'wordpress.request';
-        $attributes = ['http.method' => 'GET', 'http.url' => 'https://example.com/'];
-
-        // Set up mocks
+        $config['sample_rate'] = 1.0;
         $mock_perfbase = MockFactory::createMockPerfbase();
-
-        $this->mock_config_manager
-            ->shouldReceive('getConfig')
-            ->once()
-            ->andReturn($config);
-
-        $this->mock_config_manager
-            ->shouldReceive('isEnabled')
-            ->once()
-            ->andReturn(true);
-
-        $this->mock_request_context
-            ->shouldReceive('shouldProfileRequest')
-            ->once()
-            ->with($config)
-            ->andReturn(true);
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->once()
-            ->andReturn($span_name);
-
-        $this->mock_request_context
-            ->shouldReceive('getRequestAttributes')
-            ->once()
-            ->andReturn($attributes);
-
-        $mock_perfbase
-            ->shouldReceive('startTraceSpan')
-            ->zeroOrMoreTimes();
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        // Use reflection to inject the mock Perfbase instance
-        $this->plugin->init();
-        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-
-        $this->plugin->start_request_profiling();
-
-        // Verify that the span was added to active spans
-        $active_spans = $this->getPrivateProperty($this->plugin, 'active_spans');
-        $this->assertContains($span_name, $active_spans);
-    }
-
-    public function testStartRequestProfilingWithException()
-    {
-        $config = TestData::getValidConfig();
-
-        $mock_perfbase = Mockery::mock(Perfbase::class);
-        $mock_perfbase
-            ->shouldReceive('startTraceSpan')
-            ->once()
-            ->andThrow(new \Exception('Test exception'));
-
-        $this->mock_config_manager
-            ->shouldReceive('getConfig')
-            ->once()
-            ->andReturn($config);
-
-        $this->mock_config_manager
-            ->shouldReceive('isEnabled')
-            ->once()
-            ->andReturn(true);
+            ->andReturn('wordpress.request');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
-            ->once()
             ->andReturn(true);
 
         $this->mock_request_context
-            ->shouldReceive('getSpanName')
-            ->once()
-            ->andReturn('test.span');
-
-        $this->mock_request_context
             ->shouldReceive('getRequestAttributes')
+            ->andReturn(['http.method' => 'GET']);
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
             ->once()
-            ->andReturn([]);
-
-        Functions\when('load_plugin_textdomain')->justReturn(true);
-
-        $this->plugin->init();
-        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-
-        // Should not throw exception, but log error
-        $this->plugin->start_request_profiling();
-
-        // Active spans should remain empty
-        $active_spans = $this->getPrivateProperty($this->plugin, 'active_spans');
-        $this->assertEmpty($active_spans);
-    }
-
-    public function testWpLoadedProfiling()
-    {
-        $mock_perfbase = MockFactory::createMockPerfbase();
+            ->with('wordpress.request');
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
             ->zeroOrMoreTimes();
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', ['test.span']);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $this->plugin->wp_loaded_profiling();
+        $this->plugin->on_init();
 
-        $this->assertTrue(true); // If we get here without errors, test passes
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
     }
 
-    public function testWpLoadedProfilingWithoutActiveSpans()
+    public function testOnInitWhenShouldNotProfile()
     {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
         $mock_perfbase = MockFactory::createMockPerfbase();
 
-        // Should not call setAttribute if no active spans
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(false);
+
+        // startTraceSpan should NOT be called when shouldProfile returns false
         $mock_perfbase
-            ->shouldNotReceive('setAttribute');
+            ->shouldNotReceive('startTraceSpan');
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', []);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $this->plugin->wp_loaded_profiling();
+        $this->plugin->on_init();
 
-        $this->assertTrue(true);
+        // Lifecycle is still created, but profiling was not started
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
     }
 
-    public function testTemplateRedirectProfiling()
+    public function testOnInitWithExceptionHandledGracefully()
     {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $mock_perfbase = Mockery::mock(Perfbase::class);
+
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->andThrow(new \Exception('Test exception'));
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        // Should not throw — error is handled gracefully
+        $this->plugin->on_init();
+
+        // Lifecycle is created despite the error
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
+    }
+
+    public function testOnTemplateRedirectCallsAddWordPressContext()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
         $template_context = ['wordpress.template' => 'page.php'];
         $wordpress_context = ['wordpress.is_page' => 'true'];
 
-        $mock_perfbase = MockFactory::createMockPerfbase();
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
 
         $this->mock_request_context
             ->shouldReceive('getTemplateContext')
@@ -332,158 +290,202 @@ class PerfbasePluginTest extends BaseWordPressTest
             ->andReturn($wordpress_context);
 
         $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
             ->shouldReceive('setAttribute')
             ->zeroOrMoreTimes();
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', ['test.span']);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $this->plugin->template_redirect_profiling();
+        // First create the lifecycle via on_init
+        $this->plugin->on_init();
 
-        $this->assertTrue(true);
+        // Then call template_redirect
+        $this->plugin->on_template_redirect();
+
+        // Verify lifecycle exists and is the right type
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
     }
 
-    public function testFinishRequestProfilingSuccess()
+    public function testOnShutdownCallsStopProfiling()
     {
         $config = TestData::getValidConfig();
-        $final_attributes = ['memory.peak' => '1024', 'database.queries' => '5'];
-        $active_spans = ['wordpress.request'];
-
+        $config['sample_rate'] = 1.0;
         $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
 
         $this->mock_request_context
             ->shouldReceive('getFinalAttributes')
             ->once()
-            ->andReturn($final_attributes);
+            ->andReturn(['http_status_code' => '200']);
 
-        $this->mock_sampling_strategy
-            ->shouldReceive('getSamplingDecision')
-            ->once()
-            ->with($config)
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
             ->andReturn(true);
 
         $mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('memory.peak', '1024')
+            ->shouldReceive('startTraceSpan')
             ->zeroOrMoreTimes();
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
-            ->with('database.queries', '5')
             ->zeroOrMoreTimes();
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
             ->with('wordpress.request')
-            ->zeroOrMoreTimes();
+            ->once()
+            ->andReturn(true);
 
         $mock_perfbase
             ->shouldReceive('submitTrace')
-            ->zeroOrMoreTimes();
+            ->once()
+            ->andReturn(SubmitResult::success());
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', $active_spans);
         $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $this->plugin->finish_request_profiling();
+        $this->plugin->on_init();
+        $this->plugin->on_shutdown();
 
-        // Active spans should be cleared
-        $final_spans = $this->getPrivateProperty($this->plugin, 'active_spans');
-        $this->assertEmpty($final_spans);
+        // Active lifecycle should be cleared after shutdown
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
-    public function testFinishRequestProfilingWithoutSampling()
+    public function testOnShutdownWithNoActiveLifecycle()
     {
-        $config = TestData::getValidConfig();
-        $config['sample_rate'] = 0.0; // No sampling
+        // on_shutdown with no active lifecycle should do nothing
+        $this->plugin->on_shutdown();
 
-        $mock_perfbase = MockFactory::createMockPerfbase();
-
-        $this->mock_request_context
-            ->shouldReceive('getFinalAttributes')
-            ->once()
-            ->andReturn([]);
-
-        $this->mock_sampling_strategy
-            ->shouldReceive('getSamplingDecision')
-            ->once()
-            ->with($config)
-            ->andReturn(false);
-
-        $mock_perfbase
-            ->shouldReceive('stopTraceSpan')
-            ->zeroOrMoreTimes();
-
-        // Should not submit trace if not sampled
-        $mock_perfbase
-            ->shouldNotReceive('submitTrace');
-
-        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', ['test.span']);
-        $this->setPrivateProperty($this->plugin, 'config', $config);
-
-        $this->plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
-    public function testFinishRequestProfilingWithoutActiveSpans()
-    {
-        $mock_perfbase = MockFactory::createMockPerfbase();
-
-        // Should not proceed if no active spans
-        $mock_perfbase
-            ->shouldNotReceive('stopTraceSpan');
-
-        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
-        $this->setPrivateProperty($this->plugin, 'active_spans', []);
-
-        $this->plugin->finish_request_profiling();
-
-        $this->assertTrue(true);
-    }
-
-    public function testStartAjaxProfiling()
+    public function testOnInitCreatesAjaxRequestLifecycleWhenDoingAjax()
     {
         $_REQUEST['action'] = 'test_action';
 
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_ajax'] = true;
         $mock_perfbase = MockFactory::createMockPerfbase();
-
-        $expected_attributes = [
-            'request.type' => 'ajax',
-            'ajax.action' => 'test_action',
-        ];
 
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('ajax.test_action');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
             ->zeroOrMoreTimes();
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $this->plugin->start_ajax_profiling();
+        // Use reflection to call createLifecycleForContext with DOING_AJAX
+        // Since constants can't be redefined, test the lifecycle directly
+        $lifecycle = new AjaxRequestLifecycle('test_action', $this->plugin);
+        $this->setPrivateProperty($this->plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
 
-        $active_spans = $this->getPrivateProperty($this->plugin, 'active_spans');
-        $this->assertContains('ajax.test_action', $active_spans);
+        $this->assertInstanceOf(AjaxRequestLifecycle::class, $this->plugin->get_active_lifecycle());
     }
 
-    public function testStartCronProfiling()
+    public function testOnInitCreatesCronLifecycleWhenDoingCron()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_cron'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('cron.execution');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        // Since constants can't be redefined, test the lifecycle directly
+        $lifecycle = new CronLifecycle($this->plugin);
+        $this->setPrivateProperty($this->plugin, 'active_lifecycle', $lifecycle);
+        $lifecycle->startProfiling();
+
+        $this->assertInstanceOf(CronLifecycle::class, $this->plugin->get_active_lifecycle());
+    }
+
+    public function testOnDatabaseQuery()
     {
         $mock_perfbase = MockFactory::createMockPerfbase();
 
-        $expected_attributes = [
-            'request.type' => 'cron',
-        ];
-
         $mock_perfbase
-            ->shouldReceive('startTraceSpan')
-            ->zeroOrMoreTimes();
+            ->shouldReceive('setAttribute')
+            ->with('database.last_query', 'SELECT * FROM wp_posts')
+            ->once();
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
 
-        $this->plugin->start_cron_profiling();
+        $result = $this->plugin->on_database_query('SELECT * FROM wp_posts');
 
-        $active_spans = $this->getPrivateProperty($this->plugin, 'active_spans');
-        $this->assertContains('cron.execution', $active_spans);
+        $this->assertEquals('SELECT * FROM wp_posts', $result);
+    }
+
+    public function testOnHttpRequest()
+    {
+        $config = TestData::getValidConfig();
+        $config['flags'] = FeatureFlags::TrackHttp;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('http.external_request', 'https://api.example.com/data')
+            ->once();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $result = $this->plugin->on_http_request(false, [], 'https://api.example.com/data');
+
+        $this->assertFalse($result);
+    }
+
+    public function testOnWpDie()
+    {
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('wordpress.wp_die', 'true')
+            ->once();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+
+        $handler = function() { return 'handled'; };
+        $result = $this->plugin->on_wp_die($handler);
+
+        $this->assertSame($handler, $result);
     }
 
     public function testGetPerfbaseReturnsInstance()

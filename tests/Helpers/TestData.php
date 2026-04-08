@@ -19,7 +19,7 @@ class TestData
         return [
             'enabled' => true,
             'api_key' => 'test-api-key-12345678901234567890',
-            'api_url' => 'https://receiver.perfbase.com',
+            'api_url' => 'https://ingress.perfbase.cloud',
             'sample_rate' => 0.1,
             'flags' => FeatureFlags::DefaultFlags,
             'timeout' => 10,
@@ -28,16 +28,28 @@ class TestData
             'profile_ajax' => true,
             'profile_cron' => true,
             'profile_cli' => false,
-            'excluded_paths' => [
-                '/wp-admin/admin-ajax.php',
-                '/wp-content/uploads/',
-                '/favicon.ico'
+            'include' => [
+                'http' => ['*'],
+                'ajax' => ['*'],
+                'cron' => ['*'],
+                'cli' => ['*'],
             ],
-            'excluded_user_agents' => [
+            'exclude' => [
+                'http' => [
+                    '/wp-content/uploads/*',
+                    '/favicon.ico',
+                ],
+                'ajax' => [],
+                'cron' => [],
+                'cli' => [],
+            ],
+            'exclude_user_agents' => [
                 'bot',
                 'crawler',
                 'spider'
-            ]
+            ],
+            'debug' => false,
+            'log_errors' => true
         ];
     }
 
@@ -311,7 +323,7 @@ class TestData
             'valid_settings' => [
                 'enabled' => '1',
                 'api_key' => 'test-api-key-12345678901234567890',
-                'api_url' => 'https://receiver.perfbase.com',
+                'api_url' => 'https://ingress.perfbase.cloud',
                 'sample_rate' => '0.1',
                 'timeout' => '10',
                 'proxy' => '',

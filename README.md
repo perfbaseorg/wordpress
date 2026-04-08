@@ -1,563 +1,342 @@
-# Perfbase for WordPress
+<p align="center">
+  <a href="https://perfbase.com">
+    <img src="https://cdn.perfbase.com/img/logo-full.svg" alt="Perfbase" width="300">
+  </a>
+</p>
 
-[![Tests](https://github.com/perfbaseorg/wordpress/actions/workflows/tests.yml/badge.svg)](https://github.com/perfbaseorg/wordpress/actions/workflows/tests.yml)
-[![PHP Version](https://img.shields.io/badge/php-7.4%2B-blue)](https://php.net)
-[![WordPress Version](https://img.shields.io/badge/wordpress-5.0%2B-blue)](https://wordpress.org)
-[![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
-[![Codecov](https://codecov.io/gh/perfbaseorg/wordpress/branch/master/graph/badge.svg)](https://codecov.io/gh/perfbaseorg/wordpress)
+<h3 align="center">Perfbase for WordPress</h3>
+<p align="center">
+  WordPress integration for <a href="https://perfbase.com">Perfbase</a>.
+</p>
 
-> **Professional Application Performance Monitoring (APM) for WordPress**
+<p align="center">
+  <a href="https://packagist.org/packages/perfbase/wordpress"><img src="https://img.shields.io/packagist/v/perfbase/wordpress" alt="Packagist Version"></a>
+  <a href="https://github.com/perfbaseorg/wordpress/blob/main/LICENSE.txt"><img src="https://img.shields.io/packagist/l/perfbase/wordpress" alt="License"></a>
+  <a href="https://github.com/perfbaseorg/wordpress/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/perfbaseorg/wordpress/tests.yml?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/php-7.4%2B-blue" alt="PHP Version">
+  <img src="https://img.shields.io/badge/wordpress-5.0%2B-blue" alt="WordPress Version">
+</p>
 
-Perfbase provides real-time performance monitoring and profiling for WordPress applications. Track database queries, monitor slow requests, profile WooCommerce operations, and gain deep insights into your WordPress application's performance.
+This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/packages/perfbase/php-sdk). It detects the current WordPress execution context, starts and stops trace spans through the shared SDK, and adds WordPress-specific metadata along the way.
 
----
+## What it profiles
 
-## Table of Contents
-
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [What Gets Monitored](#what-gets-monitored)
-- [Performance Best Practices](#performance-best-practices)
-- [Development](#development)
-- [Contributing](#contributing)
-- [Support](#support)
-- [License](#license)
-
----
-
-## Features
-
-### Core Capabilities
-
-- **Real-Time Performance Monitoring** - Track request performance, execution time, and resource usage
-- **Database Query Profiling** - Monitor all SQL queries with execution time and slow query detection
-- **WordPress Integration** - Deep integration with WordPress hooks, themes, and plugins
-- **WooCommerce Support** - Specialized profiling for WooCommerce stores
-- **Cache Profiling** - Track Redis, Memcached, and WordPress object cache operations
-- **HTTP Request Monitoring** - Monitor external API calls and HTTP requests
-- **Memory & CPU Tracking** - Track resource consumption and identify bottlenecks
-- **Configurable Sampling** - Control profiling overhead with intelligent sampling
-- **Admin Dashboard** - Easy configuration through WordPress admin interface
-
-### Why Perfbase?
-
-- **Low Overhead** - Minimal performance impact with configurable sampling
-- **Production-Ready** - Battle-tested with comprehensive test coverage (181 tests)
-- **Security First** - XSS and SQL injection prevention, secure API key handling
-- **PHP 7.4-8.3 Support** - Works across all modern PHP versions
-- **Open Source** - Apache 2.0 license with active development
-
----
+- Standard HTTP requests
+- WordPress admin requests when enabled
+- AJAX requests
+- WordPress cron runs
+- WP-CLI commands
+- Additional WordPress metadata through hook-based attribute collection
 
 ## Requirements
 
-| Requirement | Version |
-|-------------|---------|
-| **PHP** | 7.4 or higher |
-| **WordPress** | 5.0 or higher |
-| **Perfbase PHP Extension** | Latest version |
-| **Composer** | For dependency management |
-
----
+- PHP `7.4` to `8.5`
+- WordPress `5.0+`
+- `ext-json`
+- `ext-perfbase`
 
 ## Installation
 
-### Via Composer (Recommended)
+### Composer-managed WordPress installs
 
 ```bash
-composer require perfbase/wordpress
+composer require perfbase/wordpress:^1.0
 ```
 
-### Manual Installation
+This is the best fit for Bedrock-style or otherwise Composer-managed WordPress projects.
 
-1. Download the [latest release](https://github.com/perfbaseorg/wordpress/releases)
-2. Upload to `/wp-content/plugins/perfbase/`
-3. Run `composer install` in the plugin directory
-4. Activate the plugin through the WordPress admin
+### Classic WordPress installs
 
-### WordPress Plugin Directory
+Until there is a WordPress.org distribution, install the plugin manually:
 
-Coming soon! The plugin will be available through the official WordPress Plugin Directory.
+1. Copy or download this package into `wp-content/plugins/perfbase`
+2. Run `composer install --no-dev` inside the plugin directory
+3. Activate the plugin in the WordPress admin
 
----
+### Install the Perfbase extension
 
-## Quick Start
-
-### 1. Install the Perfbase PHP Extension
+The plugin depends on the native Perfbase PHP extension. Install it with:
 
 ```bash
-# Install via PECL
-pecl install perfbase
-
-# Or download from https://perfbase.com/download
+bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
 ```
 
-Add to your `php.ini`:
-```ini
-extension=perfbase.so
-```
+Restart PHP-FPM, Apache, Nginx Unit, or any long-lived PHP worker after installing the extension.
 
-### 2. Get Your API Key
+## Quick start
 
-Sign up at [console.perfbase.com](https://console.perfbase.com) and create a new project to get your API key.
+1. Activate the plugin
+2. Go to `Settings -> Perfbase`
+3. Add your Perfbase API key
+4. Enable profiling
+5. Start with a sample rate like `0.1`
 
-### 3. Configure the Plugin
-
-**Via WordPress Admin:**
-
-1. Go to **Settings → Perfbase**
-2. Enter your API key
-3. Enable profiling
-4. Set your desired sample rate (start with 0.1 for 10% sampling)
-5. Save changes
-
-**Via wp-config.php:**
+If you prefer configuration in code, define the supported constants in `wp-config.php`:
 
 ```php
-// Basic configuration
 define('PERFBASE_ENABLED', true);
 define('PERFBASE_API_KEY', 'your-api-key-here');
-define('PERFBASE_SAMPLE_RATE', 0.1); // 10% of requests
+define('PERFBASE_SAMPLE_RATE', 0.1);
+define('PERFBASE_API_URL', 'https://ingress.perfbase.cloud');
+define('PERFBASE_TIMEOUT', 10);
+define('PERFBASE_PROXY', '');
+define('PERFBASE_FLAGS', \Perfbase\SDK\FeatureFlags::DefaultFlags);
 
-// Optional settings
+// Trace metadata helpers
 define('PERFBASE_ENVIRONMENT', 'production');
 define('PERFBASE_APP_VERSION', '1.0.0');
 ```
 
-### 4. Start Monitoring
+## Configuration model
 
-That's it! Visit your WordPress site and check the Perfbase dashboard to see your performance data.
+Configuration priority is:
 
----
+1. Defaults from `ConfigManager`
+2. Saved WordPress options (`perfbase_settings`)
+3. `wp-config.php` constants for the supported core keys
 
-## Configuration
+### Core settings
 
-### General Settings
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `enabled` | `false` | Global on/off switch |
+| `debug` | `false` | Surface profiling failures instead of failing open |
+| `log_errors` | `true` | Log profiling failures when debug is off |
+| `api_key` | `''` | Perfbase API key |
+| `api_url` | `https://ingress.perfbase.cloud` | Receiver base URL |
+| `sample_rate` | `0.1` | Sampling rate between `0.0` and `1.0` |
+| `timeout` | `10` | Submission timeout in seconds |
+| `proxy` | `''` | Optional outbound proxy |
+| `flags` | `FeatureFlags::DefaultFlags` | Perfbase extension flags |
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **API Key** | Your Perfbase project API key | Required |
-| **Enable Profiling** | Toggle profiling on/off | `false` |
-| **Sample Rate** | Percentage of requests to profile (0.0-1.0) | `0.1` |
-| **API URL** | Perfbase receiver endpoint | `https://receiver.perfbase.com` |
-| **Timeout** | API request timeout in seconds | `10` |
+### Context toggles
 
-### Profiling Options
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `profile_admin` | `false` | Skip admin by default |
+| `profile_ajax` | `true` | AJAX requests are profiled by default |
+| `profile_cron` | `true` | Cron requests are profiled by default |
+| `profile_cli` | `false` | WP-CLI support exists but is off by default |
 
-Control what gets profiled:
+### Filtering
 
-- **Profile Admin Area** - Include WordPress admin requests
-- **Profile AJAX Requests** - Include AJAX calls
-- **Profile Cron Jobs** - Include WordPress cron execution
-- **Profile CLI** - Include WP-CLI commands
-
-### Feature Flags
-
-Enable specific profiling features:
+The runtime filter model uses nested context filters:
 
 ```php
-use Perfbase\SDK\FeatureFlags;
+[
+    'include' => [
+        'http' => ['*'],
+        'ajax' => ['*'],
+        'cron' => ['*'],
+        'cli' => ['*'],
+    ],
+    'exclude' => [
+        'http' => [
+            '/wp-content/uploads/*',
+            '/favicon.ico',
+        ],
+        'ajax' => [],
+        'cron' => [],
+        'cli' => [],
+    ],
+    'exclude_user_agents' => [
+        'bot',
+        'crawler',
+        'spider',
+    ],
+]
+```
 
-// Enable all features
-define('PERFBASE_FLAGS', FeatureFlags::AllFlags);
+`http`, `ajax`, `cron`, and `cli` all support:
 
-// Or select specific features
-define('PERFBASE_FLAGS',
-    FeatureFlags::TrackPdo |
-    FeatureFlags::TrackHttp |
-    FeatureFlags::TrackCaches
+- `*` and `.*` wildcard matching
+- glob-style patterns through `fnmatch()`
+- regex patterns like `/^POST \/wp-admin/`
+
+### Admin UI vs runtime filters
+
+The admin page covers the common operational settings:
+
+- API key
+- enable profiling
+- sample rate
+- API URL
+- timeout
+- proxy
+- profile admin
+- profile AJAX
+- profile cron
+- feature flags
+- excluded user agents
+
+The runtime also supports the richer per-context `include` and `exclude` arrays shown above. Those are the canonical filter model used by the lifecycle classes.
+
+WP-CLI profiling is supported in the runtime, but there is currently no dedicated admin toggle for it.
+
+## Feature flags
+
+The plugin passes SDK feature flags straight through to the Perfbase extension.
+
+Common flags exposed in the admin UI include:
+
+- `UseCoarseClock`
+- `TrackCpuTime`
+- `TrackPdo`
+- `TrackHttp`
+- `TrackCaches`
+- `TrackMongodb`
+- `TrackElasticsearch`
+- `TrackQueues`
+- `TrackFileOperations`
+
+Programmatic configuration can also use the broader flag set from `perfbase/php-sdk`.
+
+Example:
+
+```php
+define(
+    'PERFBASE_FLAGS',
+    \Perfbase\SDK\FeatureFlags::UseCoarseClock |
+    \Perfbase\SDK\FeatureFlags::TrackCpuTime |
+    \Perfbase\SDK\FeatureFlags::TrackPdo
 );
 ```
 
-Available flags:
+## How it works
 
-- `UseCoarseClock` - Faster, less accurate timing (low overhead)
-- `TrackCpuTime` - Track CPU time consumption
-- `TrackPdo` - Profile database queries
-- `TrackHttp` - Monitor HTTP requests
-- `TrackCaches` - Track cache operations
-- `TrackMemoryAllocation` - Memory profiling (high overhead)
-- `TrackFileOperations` - File I/O tracking (high overhead)
+The plugin creates one lifecycle object per request context:
 
-### Exclusions
+- `HttpRequestLifecycle`
+- `AjaxRequestLifecycle`
+- `CronLifecycle`
+- `CliLifecycle`
 
-Exclude specific paths or user agents:
+At a high level:
 
-```php
-// In WordPress admin: Settings → Perfbase → Exclusions
+1. The plugin boots on `plugins_loaded`
+2. It loads config and attempts to create the shared SDK client
+3. On `init`, it detects the current context and starts the appropriate lifecycle
+4. During the request, lightweight hooks add WordPress-specific attributes
+5. On `shutdown`, the lifecycle stops the span and submits the trace
 
-// Via configuration
-$excluded_paths = [
-    '/wp-admin/admin-ajax.php',
-    '/wp-content/uploads/',
-    '/favicon.ico',
-    '/robots.txt',
-    '/wp-cron.php'
-];
+The plugin also adds context through WordPress hooks such as:
 
-$excluded_user_agents = [
-    'bot', 'crawler', 'spider', 'scraper'
-];
-```
+- request and template lifecycle hooks
+- database query hooks
+- outbound HTTP hooks
+- `wp_die` handling
+- theme and plugin lifecycle hooks
+- user, post, comment, REST API, and WooCommerce hooks when available
 
----
+Cache profiling itself is handled by the native Perfbase extension via feature flags rather than by WordPress cache hooks.
 
-## What Gets Monitored
+## Request metadata
 
-### WordPress Core
+The plugin keeps action names low-cardinality and avoids leaking sensitive query parameters.
 
-- **Request Lifecycle** - Complete WordPress request cycle
-- **Template Detection** - Active theme and template files
-- **Conditional Tags** - `is_home()`, `is_single()`, `is_page()`, etc.
-- **User Context** - User ID, roles, and authentication state
-- **Post/Page Context** - Current post ID, type, and metadata
+### Core trace attributes
 
-### Database
+- `action` in the format `GET /path`
+- `user_id` when logged in
+- `user_ip`
+- `user_agent`
+- `hostname`
+- `environment`
+- `app_version`
+- `php_version`
+- `http_method`
+- `http_url`
+- `http_status_code`
 
-- **All Queries** - Every database query with execution time
-- **Query Classification** - SELECT, INSERT, UPDATE, DELETE operations
-- **Slow Query Detection** - Queries exceeding thresholds
-- **Query Statistics** - Total count and aggregate timing
+### WordPress-specific attributes
 
-### Cache Operations
+- `wordpress.version`
+- `perfbase.version`
+- `wordpress.ajax_action`
+- `wordpress.rest_route`
+- `wordpress.admin_page`
+- template, theme, post, taxonomy, and conditional-tag attributes when available
 
-- **WordPress Object Cache** - All cache get/set operations
-- **Cache Groups** - Operations grouped by cache group
-- **External Caches** - Redis, Memcached, APC support
+`http_url` is stored without the query string. Important WordPress query parameters are broken out into dedicated attributes instead.
 
-### WooCommerce (when active)
+## Example production setup
 
-- **Page Detection** - Shop, product, cart, checkout pages
-- **Product Context** - Product ID, type, and attributes
-- **Cart Operations** - Add to cart, update quantities
-- **Order Operations** - Order creation and updates
-
-### Performance Metrics
-
-- **Memory Usage** - Peak and current memory consumption
-- **HTTP Response Codes** - Status code tracking
-- **External HTTP Requests** - Outbound API calls
-- **Component Loading** - Theme and plugin load timing
-
----
-
-## Performance Best Practices
-
-### Sampling Strategy
-
-Balance monitoring coverage with performance impact:
-
-| Environment | Recommended Sample Rate | Reasoning |
-|-------------|------------------------|-----------|
-| **Production (high-traffic)** | 0.01 - 0.05 (1-5%) | Minimal overhead, sufficient data |
-| **Production (low-traffic)** | 0.1 - 0.3 (10-30%) | More coverage, still low impact |
-| **Staging** | 0.3 - 0.5 (30-50%) | Representative sampling |
-| **Development** | 1.0 (100%) | Full coverage for debugging |
-
-### Feature Flag Impact
-
-| Impact Level | Flags | Overhead |
-|--------------|-------|----------|
-| **Low** | `UseCoarseClock`, `TrackCpuTime`, `TrackPdo` | < 1% |
-| **Medium** | `TrackHttp`, `TrackCaches` | 1-3% |
-| **High** | `TrackMemoryAllocation`, `TrackFileOperations` | 3-10% |
-
-### Recommended Production Settings
+For a typical production site:
 
 ```php
-// Optimized for high-traffic sites
 define('PERFBASE_ENABLED', true);
 define('PERFBASE_API_KEY', getenv('PERFBASE_API_KEY'));
-define('PERFBASE_SAMPLE_RATE', 0.02); // 2% sampling
+define('PERFBASE_SAMPLE_RATE', 0.02);
 define('PERFBASE_TIMEOUT', 5);
-define('PERFBASE_PROFILE_ADMIN', false); // Skip admin area
-define('PERFBASE_FLAGS',
-    FeatureFlags::UseCoarseClock |
-    FeatureFlags::TrackCpuTime |
-    FeatureFlags::TrackPdo
+define(
+    'PERFBASE_FLAGS',
+    \Perfbase\SDK\FeatureFlags::UseCoarseClock |
+    \Perfbase\SDK\FeatureFlags::TrackCpuTime |
+    \Perfbase\SDK\FeatureFlags::TrackPdo
 );
 ```
 
----
-
-## Development
-
-### Prerequisites
-
-- PHP 7.4+
-- Composer
-- Git
-
-### Setup
-
-```bash
-# Clone repository
-git clone https://github.com/perfbaseorg/wordpress.git
-cd wordpress
-
-# Install dependencies
-composer install
-
-# Run tests
-composer test
-
-# Run code quality checks
-composer phpstan  # Static analysis
-composer phpcs    # Code style check
-```
-
-### Testing
-
-The plugin includes **181 comprehensive tests** covering:
-
-- Unit Tests (isolation testing)
-- Integration Tests (WordPress integration)
-- Functional Tests (complete workflows)
-
-```bash
-# Run all tests
-composer test
-
-# Run specific test suite
-./vendor/bin/phpunit --testsuite Unit
-./vendor/bin/phpunit --testsuite Integration
-./vendor/bin/phpunit --testsuite Functional
-
-# Generate coverage report
-./vendor/bin/phpunit --coverage-html coverage/html
-open coverage/html/index.html
-```
-
-### Test Coverage
-
-| Area | Coverage | Tests |
-|------|----------|-------|
-| **Security** | 100% | XSS/SQL injection prevention |
-| **Admin Interface** | 95%+ | Settings, validation, sanitization |
-| **WordPress Hooks** | 90%+ | 40+ WordPress hooks |
-| **Request Context** | 95%+ | ClickHouse attribute mapping |
-| **Database Profiling** | 90%+ | Query tracking and analysis |
-| **Edge Cases** | 85%+ | Error handling, failures |
-
-### Continuous Integration
-
-Tests automatically run on:
-- Every push to `master`, `main`, `develop`
-- All pull requests
-- PHP versions: 7.4, 8.0, 8.1, 8.2, 8.3
-- Quality checks: PHPUnit, PHPStan (level 6), PHPCS
-
----
-
-## Contributing
-
-We welcome contributions! Here's how to get started:
-
-### Reporting Issues
-
-1. Check [existing issues](https://github.com/perfbaseorg/wordpress/issues) first
-2. Use issue templates for bugs and features
-3. Include WordPress/PHP versions and error logs
-
-### Submitting Pull Requests
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Write** tests for new functionality
-4. **Ensure** all tests pass (`composer test`)
-5. **Run** quality checks (`composer phpstan && composer phpcs`)
-6. **Commit** with clear messages
-7. **Push** to your fork
-8. **Submit** a pull request
-
-### Coding Standards
-
-- Follow [WordPress Coding Standards](https://developer.wordpress.org/coding-standards/)
-- Write unit tests for all new code
-- Maintain test coverage above 80%
-- Document public APIs with PHPDoc
-- Keep backward compatibility
-
-### Development Workflow
-
-```bash
-# Create feature branch
-git checkout -b feature/my-feature
-
-# Make changes and add tests
-# ...
-
-# Run test suite
-composer test
-
-# Run code quality checks
-composer phpstan
-composer phpcs
-
-# Fix code style issues automatically
-composer phpcbf
-
-# Commit changes
-git add .
-git commit -m "Add amazing feature"
-
-# Push and create PR
-git push origin feature/my-feature
-```
-
----
+That gives you low overhead while still capturing a useful stream of production traces.
 
 ## Troubleshooting
 
-### Extension Not Available
+### The plugin says the extension is unavailable
 
-**Error:** "Perfbase extension is not available"
+Check that the extension is loaded:
 
-**Solution:**
 ```bash
-# Verify installation
 php -m | grep perfbase
-
-# Check PHP config
 php --ini
-
-# Restart web server
-sudo systemctl restart php-fpm  # or apache2/nginx
 ```
 
-### No Data in Dashboard
+If needed, reinstall it:
 
-**Checklist:**
-1. ✓ API key is correct
-2. ✓ Sample rate > 0
-3. ✓ Profiling is enabled
-4. ✓ Requests match inclusion criteria
-5. ✓ Check exclusion rules
-6. ✓ Review WordPress error logs
+```bash
+bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
+```
 
-### Performance Impact
+### No traces are appearing
 
-If you're experiencing performance issues:
+Check these first:
 
-1. **Reduce sample rate** - Lower from 0.1 to 0.05 or 0.01
-2. **Disable heavy features** - Turn off `TrackMemoryAllocation` and `TrackFileOperations`
-3. **Add exclusions** - Exclude high-frequency endpoints
-4. **Skip admin area** - Set `PERFBASE_PROFILE_ADMIN` to `false`
-5. **Enable coarse clock** - Use `UseCoarseClock` flag
+- profiling is enabled
+- the API key is present
+- the extension is loaded
+- the current request type is allowed by your profile toggles
+- your sample rate is not set too low
+- the request is not blocked by filters or excluded user-agent rules
 
----
+### High overhead
 
-## Security
+To reduce overhead:
 
-### API Key Management
+- lower `sample_rate`
+- use `UseCoarseClock`
+- disable feature flags you do not need
+- avoid profiling admin traffic unless you need it
+- narrow your include filters
 
-- ✓ Store keys in `wp-config.php` or environment variables
-- ✓ Use different keys per environment
-- ✓ Rotate keys regularly
-- ✗ Never commit keys to version control
+## Development
 
-### Data Privacy
+Useful commands:
 
-- Profiling captures request metadata only (no sensitive content)
-- User data limited to ID and roles (no passwords)
-- Database queries captured without result sets
-- Configure exclusions for sensitive endpoints
+```bash
+composer test
+composer phpstan
+composer phpcs
+composer lint
+```
 
-### Vulnerability Reporting
+The repository includes unit, integration, and functional tests.
 
-Found a security issue? Please email [security@perfbase.com](mailto:security@perfbase.com) instead of using public issues.
+## Documentation
 
----
+Full documentation is available at [perfbase.com/docs](https://perfbase.com/docs).
 
-## FAQ
-
-**Q: Does this slow down my site?**
-A: With proper configuration, overhead is minimal (<1-2%). Use sampling rates of 0.01-0.1 for production.
-
-**Q: What data is sent to Perfbase?**
-A: Performance metrics, timing data, query information (no result sets), and request metadata. No sensitive user data.
-
-**Q: Can I use this with WP Engine/Kinsta/other managed hosts?**
-A: Yes! The PHP extension needs to be installed by the hosting provider. Contact them for custom PHP extensions.
-
-**Q: Is it GDPR compliant?**
-A: Yes. We don't collect personal data. User IDs and roles are captured for context but no PII.
-
-**Q: Does it work with WordPress Multisite?**
-A: Yes, each site in a network can be configured independently.
-
-**Q: What about WP-CLI commands?**
-A: CLI profiling can be enabled with `PERFBASE_PROFILE_CLI`. Disabled by default.
-
----
-
-## Support
-
-- **Documentation**: [docs.perfbase.com](https://docs.perfbase.com)
-- **Community**: [GitHub Discussions](https://github.com/perfbaseorg/wordpress/discussions)
-- **Issues**: [GitHub Issues](https://github.com/perfbaseorg/wordpress/issues)
-- **Email**: [support@perfbase.com](mailto:support@perfbase.com)
-- **Twitter**: [@perfbasecom](https://twitter.com/perfbasecom)
-
----
+- **Docs**: [perfbase.com/docs](https://perfbase.com/docs)
+- **Issues**: [github.com/perfbaseorg/wordpress/issues](https://github.com/perfbaseorg/wordpress/issues)
+- **Support**: [support@perfbase.com](mailto:support@perfbase.com)
 
 ## License
 
-This plugin is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
-
-```
-Copyright 2025 Perfbase
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
-
----
-
-## Changelog
-
-### 1.0.0 - Initial Release (2025-01-XX)
-
-#### Added
-- Complete WordPress integration with 40+ hooks
-- Real-time performance monitoring and profiling
-- Database query tracking and slow query detection
-- WooCommerce integration for e-commerce sites
-- Admin dashboard for easy configuration
-- Configurable sampling and feature flags
-- Cache profiling (Redis, Memcached, WordPress Object Cache)
-- HTTP request monitoring
-- Memory and CPU tracking
-- Comprehensive test suite (181 tests)
-- Multi-PHP version support (7.4-8.3)
-- CI/CD pipeline with automated testing
-
-#### Security
-- XSS prevention in admin interface
-- SQL injection prevention
-- Secure API key handling
-- Input sanitization and validation
-
----
-
-<div align="center">
-
-**[⬆ back to top](#perfbase-for-wordpress)**
-
-Made with ❤️ by the [Perfbase Team](https://perfbase.com)
-
-**[Star this repo](https://github.com/perfbaseorg/wordpress) if you find it useful!** ⭐
-
-</div>
+Apache-2.0. See [LICENSE.txt](LICENSE.txt).
