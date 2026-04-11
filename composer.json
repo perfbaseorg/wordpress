@@ -22,7 +22,7 @@
     }
   ],
   "require": {
-    "php": ">=7.4 <8.5",
+    "php": ">=7.4 <8.6",
     "ext-json": "*",
     "perfbase/php-sdk": "1.0.0"
   },

@@ -42,6 +42,7 @@ class AbstractWordPressProfilerTest extends BaseWordPressTest
         $this->mockPlugin->shouldReceive('get_config')->andReturn(
             array_merge(TestData::getValidConfig(), ['sample_rate' => 1.0])
         );
+        $this->mockPerfbase->shouldReceive('isExtensionAvailable')->byDefault()->andReturn(true);
     }
 
     public function testStartProfilingCallsStartTraceSpan(): void
@@ -94,6 +95,17 @@ class AbstractWordPressProfilerTest extends BaseWordPressTest
 
         // Should not crash
         $this->assertTrue(true);
+    }
+
+    public function testStartProfilingSkipsWhenExtensionUnavailable(): void
+    {
+        $this->mockPerfbase->shouldReceive('isExtensionAvailable')->andReturn(false);
+        $this->mockPerfbase->shouldNotReceive('startTraceSpan');
+
+        $profiler = new ConcreteTestProfiler('test.span', $this->mockPlugin);
+        $profiler->startProfiling();
+
+        $this->addToAssertionCount(1);
     }
 
     public function testStopProfilingSubmitsAndSucceeds(): void

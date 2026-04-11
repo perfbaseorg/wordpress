@@ -19,8 +19,14 @@ class ConfigManager
         $defaults = $this->getDefaultConfig();
         $saved_settings = get_option('perfbase_settings', []);
 
+        if (!is_array($saved_settings)) {
+            $saved_settings = [];
+        }
+
         // wp_parse_args merges saved settings over defaults
         $config = wp_parse_args($saved_settings, $defaults);
+
+        $config = $this->migrateLegacyConfig($config);
 
         // wp-config.php constants override everything (highest priority)
         $config = $this->applyConstants($config);
@@ -55,6 +61,45 @@ class ConfigManager
                 $config[$key] = constant($constant);
             }
         }
+
+        return $config;
+    }
+
+    /**
+     * Migrate legacy saved config keys into the canonical runtime shape.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function migrateLegacyConfig(array $config): array
+    {
+        $include = isset($config['include']) && is_array($config['include'])
+            ? $config['include']
+            : [];
+        $exclude = isset($config['exclude']) && is_array($config['exclude'])
+            ? $config['exclude']
+            : [];
+
+        foreach (['http', 'ajax', 'cron', 'cli'] as $context) {
+            if (!isset($include[$context]) || !is_array($include[$context])) {
+                $include[$context] = $this->getDefaultConfig()['include'][$context];
+            }
+
+            if (!isset($exclude[$context]) || !is_array($exclude[$context])) {
+                $exclude[$context] = $this->getDefaultConfig()['exclude'][$context];
+            }
+        }
+
+        if (!empty($config['excluded_paths']) && is_array($config['excluded_paths'])) {
+            foreach ($config['excluded_paths'] as $path) {
+                if (is_string($path) && $path !== '' && !in_array($path, $exclude['http'], true)) {
+                    $exclude['http'][] = $path;
+                }
+            }
+        }
+
+        $config['include'] = $include;
+        $config['exclude'] = $exclude;
 
         return $config;
     }

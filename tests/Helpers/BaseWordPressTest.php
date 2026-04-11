@@ -53,6 +53,13 @@ abstract class BaseWordPressTest extends TestCase
         Functions\when('esc_url_raw')->returnArg();
         Functions\when('esc_textarea')->returnArg();
         Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('sanitize_key')->alias(function($value) {
+            $value = strtolower((string) $value);
+            $value = preg_replace('/[^a-z0-9_\-]/', '_', $value);
+            $value = preg_replace('/_+/', '_', (string) $value);
+            return trim((string) $value, '_');
+        });
+        Functions\when('error_log')->justReturn(true);
         Functions\when('wp_parse_args')->alias(function($args, $defaults) {
             return array_merge($defaults, $args);
         });

@@ -31,7 +31,7 @@ class PerfbasePlugin {
     /**
      * Plugin version
      */
-    public const VERSION = '1.0.0';
+    public const VERSION = PERFBASE_PLUGIN_VERSION;
 
     /**
      * Perfbase SDK instance
@@ -169,7 +169,6 @@ class PerfbasePlugin {
     private function init_admin(): void
     {
         if (is_admin()) {
-            require_once PERFBASE_PLUGIN_DIR . 'src/PerfbaseAdmin.php';
             $this->admin = new PerfbaseAdmin($this);
         }
     }
@@ -181,7 +180,6 @@ class PerfbasePlugin {
      */
     private function init_profiler(): void
     {
-        require_once PERFBASE_PLUGIN_DIR . 'src/PerfbaseProfiler.php';
         $this->profiler = new PerfbaseProfiler($this);
     }
 
@@ -202,11 +200,7 @@ class PerfbasePlugin {
         add_action('shutdown', [$this, 'on_shutdown'], 999);
 
         // Attribute collection hooks (lightweight, set directly on SDK)
-        if (($this->config['flags'] & FeatureFlags::TrackPdo) !== 0) {
-            add_filter('query', [$this, 'on_database_query'], 10, 1);
-        }
         add_filter('pre_http_request', [$this, 'on_http_request'], 10, 3);
-        add_filter('wp_die_handler', [$this, 'on_wp_die']);
     }
 
     // ------------------------------------------------------------------
@@ -274,8 +268,7 @@ class PerfbasePlugin {
     {
         // AJAX requests (detected via DOING_AJAX constant)
         if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
-            $action = $_REQUEST['action'] ?? 'unknown';
-            return new AjaxRequestLifecycle($action, $this);
+            return new AjaxRequestLifecycle((string) ($_REQUEST['action'] ?? 'unknown'), $this);
         }
 
         // Cron requests (detected via DOING_CRON constant)
@@ -298,20 +291,6 @@ class PerfbasePlugin {
     // ------------------------------------------------------------------
 
     /**
-     * Profile database query.
-     *
-     * @param string $query
-     * @return string
-     */
-    public function on_database_query(string $query): string
-    {
-        if ($this->perfbase) {
-            $this->perfbase->setAttribute('database.last_query', substr($query, 0, 100));
-        }
-        return $query;
-    }
-
-    /**
      * Profile HTTP request.
      *
      * @param mixed $preempt
@@ -322,23 +301,42 @@ class PerfbasePlugin {
     public function on_http_request($preempt, $args, string $url)
     {
         if ($this->perfbase && ($this->config['flags'] & FeatureFlags::TrackHttp)) {
-            $this->perfbase->setAttribute('http.external_request', $url);
+            $sanitizedUrl = $this->sanitizeExternalUrl($url);
+            if ($sanitizedUrl !== null) {
+                $this->perfbase->setAttribute('http.external_request', $sanitizedUrl);
+            }
         }
         return $preempt;
     }
 
     /**
-     * Handle wp_die.
+     * Sanitize an outbound URL to scheme + host + path only.
      *
-     * @param callable $handler
-     * @return callable
+     * @param string $url
+     * @return string|null
      */
-    public function on_wp_die(callable $handler): callable
+    private function sanitizeExternalUrl(string $url): ?string
     {
-        if ($this->perfbase) {
-            $this->perfbase->setAttribute('wordpress.wp_die', 'true');
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return null;
         }
-        return $handler;
+
+        $scheme = isset($parts['scheme']) && is_string($parts['scheme']) ? $parts['scheme'] : 'http';
+        $host = is_string($parts['host']) ? $parts['host'] : '';
+        $path = isset($parts['path']) && is_string($parts['path']) ? $parts['path'] : '/';
+
+        if ($host === '') {
+            return null;
+        }
+
+        $sanitized = sprintf('%s://%s%s', $scheme, $host, $path);
+
+        if (isset($parts['port']) && is_int($parts['port'])) {
+            $sanitized = sprintf('%s://%s:%d%s', $scheme, $host, $parts['port'], $path);
+        }
+
+        return $sanitized;
     }
 
     // ------------------------------------------------------------------

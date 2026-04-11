@@ -25,8 +25,12 @@ class FilterMatcher
 
             // Regex patterns enclosed in forward slashes
             if (preg_match('/^\/.*\/$/', $filter)) {
+                if (!self::isValidRegex($filter)) {
+                    continue;
+                }
+
                 foreach ($components as $component) {
-                    if (preg_match($filter, $component)) {
+                    if (@preg_match($filter, $component) === 1) {
                         return true;
                     }
                 }
@@ -42,6 +46,17 @@ class FilterMatcher
         }
 
         return false;
+    }
+
+    /**
+     * Validate a regex filter without emitting warnings into request-time logs.
+     *
+     * @param string $filter
+     * @return bool
+     */
+    private static function isValidRegex(string $filter): bool
+    {
+        return @preg_match($filter, '') !== false;
     }
 
     /**

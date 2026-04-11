@@ -95,6 +95,18 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertEquals('https://ingress.perfbase.cloud', $config['api_url']);
     }
 
+    public function testGetConfigMigratesLegacyExcludedPaths()
+    {
+        Functions\when('get_option')->justReturn([
+            'excluded_paths' => ['/legacy-one', '/legacy-two'],
+        ]);
+
+        $config = $this->config_manager->getConfig();
+
+        $this->assertContains('/legacy-one', $config['exclude']['http']);
+        $this->assertContains('/legacy-two', $config['exclude']['http']);
+    }
+
     public function testUpdateConfig()
     {
         $new_config = TestData::getValidConfig();

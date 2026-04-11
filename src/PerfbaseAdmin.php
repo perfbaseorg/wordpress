@@ -166,6 +166,14 @@ class PerfbaseAdmin {
         );
 
         add_settings_field(
+            'profile_cli',
+            __('Profile WP-CLI Commands', 'perfbase'),
+            [$this, 'render_profile_cli_field'],
+            'perfbase-settings',
+            'perfbase_profiling'
+        );
+
+        add_settings_field(
             'flags',
             __('Feature Flags', 'perfbase'),
             [$this, 'render_flags_field'],
@@ -182,17 +190,25 @@ class PerfbaseAdmin {
         );
 
         add_settings_field(
-            'excluded_paths',
-            __('Excluded Paths', 'perfbase'),
-            [$this, 'render_excluded_paths_field'],
+            'include_http',
+            __('Included HTTP Paths', 'perfbase'),
+            [$this, 'render_include_http_field'],
             'perfbase-settings',
             'perfbase_exclusions'
         );
 
         add_settings_field(
-            'excluded_user_agents',
+            'exclude_http',
+            __('Excluded HTTP Paths', 'perfbase'),
+            [$this, 'render_exclude_http_field'],
+            'perfbase-settings',
+            'perfbase_exclusions'
+        );
+
+        add_settings_field(
+            'exclude_user_agents',
             __('Excluded User Agents', 'perfbase'),
-            [$this, 'render_excluded_user_agents_field'],
+            [$this, 'render_exclude_user_agents_field'],
             'perfbase-settings',
             'perfbase_exclusions'
         );
@@ -269,7 +285,7 @@ class PerfbaseAdmin {
                 </div>
             <?php endif; ?>
 
-            <?php if (isset($_GET['settings-updated'])): ?>
+            <?php if (!empty(sanitize_text_field(wp_unslash($_GET['settings-updated'] ?? '')))): ?>
                 <div class="notice notice-success is-dismissible">
                     <p><?php _e('Settings saved.', 'perfbase'); ?></p>
                 </div>
@@ -509,6 +525,22 @@ class PerfbaseAdmin {
     }
 
     /**
+     * Render profile CLI field
+     *
+     * @return void
+     */
+    public function render_profile_cli_field() {
+        $config = $this->plugin->get_config();
+        $checked = !empty($config['profile_cli']);
+        ?>
+        <input type="checkbox" name="perfbase_settings[profile_cli]" value="1" <?php checked($checked); ?> />
+        <p class="description">
+            <?php _e('Profile WP-CLI command execution.', 'perfbase'); ?>
+        </p>
+        <?php
+    }
+
+    /**
      * Render flags field
      *
      * @return void
@@ -549,13 +581,35 @@ class PerfbaseAdmin {
      *
      * @return void
      */
-    public function render_excluded_paths_field() {
+    public function render_include_http_field() {
         $config = $this->plugin->get_config();
-        $value = implode("\n", $config['excluded_paths'] ?? []);
+        $include = isset($config['include']['http']) && is_array($config['include']['http'])
+            ? $config['include']['http']
+            : ['*'];
+        $value = implode("\n", $include);
         ?>
-        <textarea name="perfbase_settings[excluded_paths]" rows="5" class="large-text"><?php echo esc_textarea($value); ?></textarea>
+        <textarea name="perfbase_settings[include_http]" rows="5" class="large-text"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
-            <?php _e('Enter one path per line. Requests matching these paths will not be profiled.', 'perfbase'); ?>
+            <?php _e('Enter one HTTP include pattern per line. Use * to include everything.', 'perfbase'); ?>
+        </p>
+        <?php
+    }
+
+    /**
+     * Render excluded HTTP paths/patterns field.
+     *
+     * @return void
+     */
+    public function render_exclude_http_field() {
+        $config = $this->plugin->get_config();
+        $exclude = isset($config['exclude']['http']) && is_array($config['exclude']['http'])
+            ? $config['exclude']['http']
+            : [];
+        $value = implode("\n", $exclude);
+        ?>
+        <textarea name="perfbase_settings[exclude_http]" rows="5" class="large-text"><?php echo esc_textarea($value); ?></textarea>
+        <p class="description">
+            <?php _e('Enter one HTTP exclude pattern per line. Matching requests will not be profiled.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -565,11 +619,11 @@ class PerfbaseAdmin {
      *
      * @return void
      */
-    public function render_excluded_user_agents_field() {
+    public function render_exclude_user_agents_field() {
         $config = $this->plugin->get_config();
-        $value = implode("\n", $config['excluded_user_agents'] ?? []);
+        $value = implode("\n", $config['exclude_user_agents'] ?? []);
         ?>
-        <textarea name="perfbase_settings[excluded_user_agents]" rows="3" class="large-text"><?php echo esc_textarea($value); ?></textarea>
+        <textarea name="perfbase_settings[exclude_user_agents]" rows="3" class="large-text"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
             <?php _e('Enter one user agent pattern per line. Requests from matching user agents will not be profiled.', 'perfbase'); ?>
         </p>
@@ -584,6 +638,7 @@ class PerfbaseAdmin {
      */
     public function sanitize_settings($input) {
         $sanitized = [];
+        $existing = $this->plugin->get_config();
 
         // Basic fields
         $sanitized['enabled'] = !empty($input['enabled']);
@@ -603,36 +658,81 @@ class PerfbaseAdmin {
         $flags = 0;
         if (!empty($input['flags']) && is_array($input['flags'])) {
             foreach ($input['flags'] as $flag) {
-                $flags |= (int) $flag;
+                $flags |= (((int) $flag) & FeatureFlags::AllFlags);
             }
         }
-        $sanitized['flags'] = $flags;
+        $sanitized['flags'] = $flags & FeatureFlags::AllFlags;
 
-        // Excluded paths
-        $excluded_paths = [];
-        if (!empty($input['excluded_paths'])) {
-            $lines = explode("\n", $input['excluded_paths']);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (!empty($line)) {
-                    $excluded_paths[] = sanitize_text_field($line);
-                }
-            }
-        }
-        $sanitized['excluded_paths'] = $excluded_paths;
+        $sanitized['include'] = $this->sanitizeContextFilters(
+            is_array($existing['include'] ?? null) ? $existing['include'] : [],
+            'http',
+            $input['include_http'] ?? null,
+            ['*']
+        );
+        $sanitized['exclude'] = $this->sanitizeContextFilters(
+            is_array($existing['exclude'] ?? null) ? $existing['exclude'] : [],
+            'http',
+            $input['exclude_http'] ?? ($input['excluded_paths'] ?? null),
+            []
+        );
+        $sanitized['exclude_user_agents'] = $this->sanitizeLineList(
+            $input['exclude_user_agents'] ?? ($input['excluded_user_agents'] ?? null)
+        );
 
-        // Excluded user agents
-        $excluded_user_agents = [];
-        if (!empty($input['excluded_user_agents'])) {
-            $lines = explode("\n", $input['excluded_user_agents']);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (!empty($line)) {
-                    $excluded_user_agents[] = sanitize_text_field($line);
-                }
+        return $sanitized;
+    }
+
+    /**
+     * Sanitize per-context filter arrays while preserving untouched contexts.
+     *
+     * @param array<string, mixed> $existing
+     * @param string $contextKey
+     * @param mixed $inputValue
+     * @param array<int, string> $default
+     * @return array<string, array<int, string>>
+     */
+    private function sanitizeContextFilters(array $existing, string $contextKey, $inputValue, array $default): array
+    {
+        $filters = [];
+
+        foreach (['http', 'ajax', 'cron', 'cli'] as $key) {
+            if (isset($existing[$key]) && is_array($existing[$key])) {
+                $filters[$key] = array_values(array_filter($existing[$key], 'is_string'));
+            } else {
+                $filters[$key] = $key === $contextKey ? $default : [];
             }
         }
-        $sanitized['excluded_user_agents'] = $excluded_user_agents;
+
+        $sanitizedInput = $this->sanitizeLineList($inputValue);
+        $filters[$contextKey] = !empty($sanitizedInput) ? $sanitizedInput : $default;
+
+        return $filters;
+    }
+
+    /**
+     * Sanitize textarea line input into a string list.
+     *
+     * @param mixed $value
+     * @return array<int, string>
+     */
+    private function sanitizeLineList($value): array
+    {
+        if (!is_string($value) || $value === '') {
+            return [];
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $value);
+        if (!is_array($lines)) {
+            return [];
+        }
+
+        $sanitized = [];
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+            if ($line !== '') {
+                $sanitized[] = sanitize_text_field($line);
+            }
+        }
 
         return $sanitized;
     }

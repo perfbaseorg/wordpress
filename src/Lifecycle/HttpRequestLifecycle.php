@@ -25,10 +25,6 @@ class HttpRequestLifecycle extends AbstractWordPressProfiler
             return false;
         }
 
-        if ($this->perfbase && !$this->perfbase->isExtensionAvailable()) {
-            return false;
-        }
-
         return true;
     }
 

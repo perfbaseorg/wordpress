@@ -27,6 +27,8 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->mock_plugin = Mockery::mock(PerfbasePlugin::class);
         $this->mock_plugin->shouldReceive('get_config')
             ->andReturn(TestData::getValidConfig());
+        $this->mock_plugin->shouldReceive('get_perfbase')
+            ->andReturn(null);
 
         // Mock WordPress admin functions
         $this->mockAdminEnvironment();
@@ -82,8 +84,9 @@ class PerfbaseAdminTest extends BaseWordPressTest
             'profile_cron' => '1',
             'profile_cli' => '',
             'flags' => [FeatureFlags::TrackPdo, FeatureFlags::TrackHttp],
-            'excluded_paths' => "/wp-admin/\n/wp-cron.php",
-            'excluded_user_agents' => "bot\ncrawler"
+            'include_http' => "/\n/wp-json/*",
+            'exclude_http' => "/wp-admin/\n/wp-cron.php",
+            'exclude_user_agents' => "bot\ncrawler"
         ];
 
         Functions\when('sanitize_text_field')->returnArg();
@@ -100,8 +103,11 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertTrue($result['profile_ajax']);
         $this->assertFalse($result['profile_cli']);
         $this->assertIsInt($result['flags']);
-        $this->assertCount(2, $result['excluded_paths']);
-        $this->assertCount(2, $result['excluded_user_agents']);
+        $this->assertEquals(['/', '/wp-json/*'], $result['include']['http']);
+        $this->assertEquals(['/wp-admin/', '/wp-cron.php'], $result['exclude']['http']);
+        $this->assertEquals(['bot', 'crawler'], $result['exclude_user_agents']);
+        $this->assertEquals(['*'], $result['include']['ajax']);
+        $this->assertEquals([], $result['exclude']['ajax']);
     }
 
     public function testSanitizeSettingsClampsSampleRate()
@@ -160,14 +166,16 @@ class PerfbaseAdminTest extends BaseWordPressTest
         Functions\when('esc_url_raw')->returnArg();
 
         $input = [
-            'excluded_paths' => "  /wp-admin/  \n\n  /wp-cron.php  \n  ",
-            'excluded_user_agents' => "  bot  \n  crawler  "
+            'include_http' => "  /  \n\n  /wp-json/*  \n  ",
+            'exclude_http' => "  /wp-admin/  \n\n  /wp-cron.php  \n  ",
+            'exclude_user_agents' => "  bot  \n  crawler  "
         ];
 
         $result = $this->admin->sanitize_settings($input);
 
-        $this->assertEquals(['/wp-admin/', '/wp-cron.php'], $result['excluded_paths']);
-        $this->assertEquals(['bot', 'crawler'], $result['excluded_user_agents']);
+        $this->assertEquals(['/', '/wp-json/*'], $result['include']['http']);
+        $this->assertEquals(['/wp-admin/', '/wp-cron.php'], $result['exclude']['http']);
+        $this->assertEquals(['bot', 'crawler'], $result['exclude_user_agents']);
     }
 
     public function testSanitizeSettingsHandlesFlagsBitmask()
@@ -187,6 +195,18 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $expected_flags = FeatureFlags::TrackPdo | FeatureFlags::TrackHttp | FeatureFlags::TrackCaches;
         $this->assertEquals($expected_flags, $result['flags']);
+    }
+
+    public function testSanitizeSettingsMasksUnknownFlagBits()
+    {
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $this->admin->sanitize_settings([
+            'flags' => [FeatureFlags::TrackPdo, 1 << 30],
+        ]);
+
+        $this->assertEquals(FeatureFlags::TrackPdo, $result['flags']);
     }
 
     public function testSanitizeSettingsHandlesInvalidFlags()
@@ -339,6 +359,18 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('name="perfbase_settings[enabled]"', $output);
     }
 
+    public function testRenderProfileCliFieldShowsCheckbox()
+    {
+        Functions\when('checked')->justReturn('checked="checked"');
+
+        ob_start();
+        $this->admin->render_profile_cli_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('type="checkbox"', $output);
+        $this->assertStringContainsString('name="perfbase_settings[profile_cli]"', $output);
+    }
+
     public function testRenderSampleRateFieldHasValidation()
     {
         Functions\when('esc_attr')->returnArg();
@@ -366,28 +398,103 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('max="60"', $output);
     }
 
-    public function testRenderExcludedPathsFieldShowsTextarea()
+    public function testRenderIncludeHttpFieldShowsTextarea()
     {
         Functions\when('esc_textarea')->returnArg();
 
         ob_start();
-        $this->admin->render_excluded_paths_field();
+        $this->admin->render_include_http_field();
         $output = ob_get_clean();
 
         $this->assertStringContainsString('<textarea', $output);
-        $this->assertStringContainsString('name="perfbase_settings[excluded_paths]"', $output);
+        $this->assertStringContainsString('name="perfbase_settings[include_http]"', $output);
     }
 
-    public function testRenderExcludedUserAgentsFieldShowsTextarea()
+    public function testRenderExcludeHttpFieldShowsTextarea()
     {
         Functions\when('esc_textarea')->returnArg();
 
         ob_start();
-        $this->admin->render_excluded_user_agents_field();
+        $this->admin->render_exclude_http_field();
         $output = ob_get_clean();
 
         $this->assertStringContainsString('<textarea', $output);
-        $this->assertStringContainsString('name="perfbase_settings[excluded_user_agents]"', $output);
+        $this->assertStringContainsString('name="perfbase_settings[exclude_http]"', $output);
+    }
+
+    public function testRenderExcludeUserAgentsFieldShowsTextarea()
+    {
+        Functions\when('esc_textarea')->returnArg();
+
+        ob_start();
+        $this->admin->render_exclude_user_agents_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('<textarea', $output);
+        $this->assertStringContainsString('name="perfbase_settings[exclude_user_agents]"', $output);
+    }
+
+    public function testRenderSettingsPageShowsSavedNoticeWithSanitizedFlag()
+    {
+        $_GET['settings-updated'] = '1';
+
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('get_admin_page_title')->justReturn('Perfbase Settings');
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('wp_unslash')->returnArg();
+        Functions\when('settings_fields')->justReturn();
+        Functions\when('do_settings_sections')->justReturn();
+        Functions\when('submit_button')->justReturn();
+        Functions\when('get_bloginfo')->alias(function ($field) {
+            return $field === 'version' ? '6.8.0' : '';
+        });
+        Functions\when('__')->alias(function ($text) {
+            return $text;
+        });
+        Functions\when('_e')->alias(function ($text) {
+            echo $text;
+        });
+        Functions\when('esc_html')->returnArg();
+
+        ob_start();
+        $this->admin->render_settings_page();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Settings saved.', $output);
+    }
+
+    public function testSanitizeSettingsMigratesLegacyExcludedPaths()
+    {
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $this->admin->sanitize_settings([
+            'excluded_paths' => "/legacy-one\n/legacy-two",
+        ]);
+
+        $this->assertEquals(['/legacy-one', '/legacy-two'], $result['exclude']['http']);
+    }
+
+    public function testSanitizeSettingsPreservesNestedFiltersForOtherContexts()
+    {
+        $config = TestData::getValidConfig();
+        $config['include']['ajax'] = ['heartbeat'];
+        $config['exclude']['ajax'] = ['forbidden'];
+
+        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
+        $mockPlugin->shouldReceive('get_config')->andReturn($config);
+        $admin = new PerfbaseAdmin($mockPlugin);
+
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $admin->sanitize_settings([
+            'exclude_http' => "/wp-admin/*",
+        ]);
+
+        $this->assertEquals(['heartbeat'], $result['include']['ajax']);
+        $this->assertEquals(['forbidden'], $result['exclude']['ajax']);
+        $this->assertEquals(['/wp-admin/*'], $result['exclude']['http']);
     }
 
     public function testRenderGeneralSectionShowsDescription()

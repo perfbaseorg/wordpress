@@ -206,6 +206,10 @@ class PerfbasePluginTest extends BaseWordPressTest
             ->shouldReceive('shouldProfileRequest')
             ->andReturn(false);
 
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
         // startTraceSpan should NOT be called when shouldProfile returns false
         $mock_perfbase
             ->shouldNotReceive('startTraceSpan');
@@ -389,6 +393,10 @@ class PerfbasePluginTest extends BaseWordPressTest
         $mock_perfbase = MockFactory::createMockPerfbase();
 
         $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
             ->shouldReceive('startTraceSpan')
             ->once()
             ->with('ajax.test_action');
@@ -409,12 +417,45 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertInstanceOf(AjaxRequestLifecycle::class, $this->plugin->get_active_lifecycle());
     }
 
+    public function testAjaxLifecycleNormalizesActionName()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_ajax'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('ajax.load_more_posts');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $lifecycle = new AjaxRequestLifecycle('  Load More Posts!?  ', $this->plugin);
+        $lifecycle->startProfiling();
+
+        $this->assertSame('ajax.load_more_posts', $lifecycle->getSpanName());
+    }
+
     public function testOnInitCreatesCronLifecycleWhenDoingCron()
     {
         $config = TestData::getValidConfig();
         $config['sample_rate'] = 1.0;
         $config['profile_cron'] = true;
         $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
 
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
@@ -436,20 +477,25 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertInstanceOf(CronLifecycle::class, $this->plugin->get_active_lifecycle());
     }
 
-    public function testOnDatabaseQuery()
+    public function testRegisterHooksDoesNotRegisterQueryFilter()
     {
-        $mock_perfbase = MockFactory::createMockPerfbase();
+        $filtersRegistered = [];
 
-        $mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('database.last_query', 'SELECT * FROM wp_posts')
-            ->once();
+        Functions\when('add_action')->justReturn(true);
+        Functions\when('add_filter')->alias(function ($hook) use (&$filtersRegistered) {
+            $filtersRegistered[] = $hook;
+            return true;
+        });
 
-        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', TestData::getValidConfig());
 
-        $result = $this->plugin->on_database_query('SELECT * FROM wp_posts');
+        $reflection = new \ReflectionClass($this->plugin);
+        $method = $reflection->getMethod('register_hooks');
+        $method->setAccessible(true);
+        $method->invoke($this->plugin);
 
-        $this->assertEquals('SELECT * FROM wp_posts', $result);
+        $this->assertNotContains('query', $filtersRegistered);
+        $this->assertContains('pre_http_request', $filtersRegistered);
     }
 
     public function testOnHttpRequest()
@@ -471,21 +517,38 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertFalse($result);
     }
 
-    public function testOnWpDie()
+    public function testOnHttpRequestStripsQueryStringAndFragment()
     {
+        $config = TestData::getValidConfig();
+        $config['flags'] = FeatureFlags::TrackHttp;
         $mock_perfbase = MockFactory::createMockPerfbase();
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
-            ->with('wordpress.wp_die', 'true')
+            ->with('http.external_request', 'https://api.example.com/data/path')
             ->once();
 
         $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
 
-        $handler = function() { return 'handled'; };
-        $result = $this->plugin->on_wp_die($handler);
+        $this->plugin->on_http_request(false, [], 'https://api.example.com/data/path?token=secret#frag');
+        $this->assertTrue(true);
+    }
 
-        $this->assertSame($handler, $result);
+    public function testOnHttpRequestOmitsInvalidUrl()
+    {
+        $config = TestData::getValidConfig();
+        $config['flags'] = FeatureFlags::TrackHttp;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldNotReceive('setAttribute');
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_http_request(false, [], 'not a valid url');
+        $this->assertTrue(true);
     }
 
     public function testGetPerfbaseReturnsInstance()
@@ -505,6 +568,6 @@ class PerfbasePluginTest extends BaseWordPressTest
 
     public function testVersionConstant()
     {
-        $this->assertEquals('1.0.0', PerfbasePlugin::VERSION);
+        $this->assertEquals(PERFBASE_PLUGIN_VERSION, PerfbasePlugin::VERSION);
     }
 }

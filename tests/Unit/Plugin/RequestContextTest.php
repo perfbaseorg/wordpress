@@ -388,6 +388,25 @@ class RequestContextTest extends BaseWordPressTest
         $this->assertFalse($result);
     }
 
+    public function testShouldProfileRequestHonorsIncludeFiltersWithoutExcludes()
+    {
+        $config = [
+            'profile_admin' => true,
+            'include' => ['http' => ['/wp-json/*']],
+            'exclude' => ['http' => []],
+            'exclude_user_agents' => []
+        ];
+
+        $_SERVER['REQUEST_URI'] = '/non-matching-page/';
+        $_SERVER['HTTP_USER_AGENT'] = 'SimpleTestAgent';
+
+        Functions\when('is_admin')->justReturn(false);
+
+        $result = $this->request_context->shouldProfileRequest($config);
+
+        $this->assertFalse($result);
+    }
+
     // Edge Case Tests for Recent Changes
 
     public function testGetRequestAttributesStripsQueryParamsFromAction()

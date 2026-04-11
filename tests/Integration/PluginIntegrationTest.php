@@ -297,7 +297,7 @@ class PluginIntegrationTest extends BaseWordPressTest
         $this->assertContains('shutdown', $hooks_registered);
         $this->assertContains('template_redirect', $hooks_registered);
         $this->assertContains('pre_http_request', $hooks_registered);
-        $this->assertContains('wp_die_handler', $hooks_registered);
+        $this->assertNotContains('query', $hooks_registered);
     }
 
     public function testShutdownWithNoLifecycleDoesNothing()
@@ -308,19 +308,4 @@ class PluginIntegrationTest extends BaseWordPressTest
         $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
-    public function testDatabaseQueryProfilingIntegration()
-    {
-        $mock_perfbase = $this->setUpPluginWithMockSdk();
-
-        $mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('database.last_query', Mockery::any())
-            ->twice();
-
-        $this->plugin->on_database_query('SELECT * FROM wp_posts WHERE ID = 1');
-        $result = $this->plugin->on_database_query('INSERT INTO wp_postmeta (post_id, meta_key) VALUES (1, "key")');
-
-        // Query should be returned unchanged
-        $this->assertEquals('INSERT INTO wp_postmeta (post_id, meta_key) VALUES (1, "key")', $result);
-    }
 }

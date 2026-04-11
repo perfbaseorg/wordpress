@@ -89,14 +89,13 @@ class FullRequestCycleTest extends BaseWordPressTest
             ->shouldReceive('getFinalAttributes')
             ->andReturn(['http_status_code' => '200']);
 
-        // Full lifecycle: init -> template_redirect -> database/http -> shutdown
+        // Full lifecycle: init -> template_redirect -> http -> shutdown
         $plugin->on_init();
         $this->assertInstanceOf(HttpRequestLifecycle::class, $plugin->get_active_lifecycle());
 
         $plugin->on_template_redirect();
 
-        // Simulate database query and HTTP request hooks
-        $plugin->on_database_query('SELECT * FROM wp_posts WHERE post_status = "publish"');
+        // Simulate outbound HTTP hook
         $plugin->on_http_request(null, [], 'https://api.example.com/data');
 
         $plugin->on_shutdown();
@@ -242,20 +241,6 @@ class FullRequestCycleTest extends BaseWordPressTest
             ->andReturn(['http_status_code' => '200']);
 
         $plugin->on_init();
-
-        // Simulate multiple database queries
-        $queries = [
-            'SELECT * FROM wp_posts WHERE post_status = "publish" ORDER BY post_date DESC LIMIT 20',
-            'SELECT * FROM wp_postmeta WHERE post_id IN (1,2,3,4,5)',
-            'SELECT * FROM wp_terms WHERE term_id = 5',
-            'SELECT * FROM wp_options WHERE autoload = "yes"',
-            'SELECT COUNT(*) FROM wp_posts WHERE post_type = "post"',
-        ];
-
-        foreach ($queries as $query) {
-            $result = $plugin->on_database_query($query);
-            $this->assertEquals($query, $result);
-        }
 
         // Simulate external API calls
         $plugin->on_http_request(null, [], 'https://api.analytics.example.com/track');

@@ -378,7 +378,7 @@ class RequestContext
         $include = $config['include'] ?? [];
         $exclude = $config['exclude'] ?? [];
 
-        if (!empty($include) && !empty($exclude)) {
+        if (!empty($include)) {
             if (!\Perfbase\WordPress\Support\FilterMatcher::passesFilters(
                 $components,
                 is_array($include) ? $include : [],

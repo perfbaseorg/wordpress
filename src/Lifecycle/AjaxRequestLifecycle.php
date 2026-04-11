@@ -15,8 +15,8 @@ class AjaxRequestLifecycle extends AbstractWordPressProfiler
 
     public function __construct(string $action, PerfbasePlugin $plugin)
     {
-        parent::__construct("ajax.{$action}", $plugin);
-        $this->action = $action;
+        $this->action = self::normalizeAction($action);
+        parent::__construct("ajax.{$this->action}", $plugin);
     }
 
     protected function shouldProfile(): bool
@@ -42,5 +42,26 @@ class AjaxRequestLifecycle extends AbstractWordPressProfiler
             'action' => "ajax.{$this->action}",
             'ajax.action' => $this->action,
         ]);
+    }
+
+    /**
+     * Normalize AJAX action names for low-cardinality tracing.
+     *
+     * @param string $action
+     * @return string
+     */
+    private static function normalizeAction(string $action): string
+    {
+        $normalized = trim($action);
+        if ($normalized === '') {
+            return 'unknown';
+        }
+
+        $normalized = sanitize_key($normalized);
+        if ($normalized === '') {
+            return 'unknown';
+        }
+
+        return substr($normalized, 0, 64);
     }
 }

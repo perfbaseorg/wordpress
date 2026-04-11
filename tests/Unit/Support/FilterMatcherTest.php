@@ -61,6 +61,14 @@ class FilterMatcherTest extends BaseWordPressTest
         ));
     }
 
+    public function testIgnoresInvalidRegexWithoutWarning()
+    {
+        $this->assertFalse(FilterMatcher::matches(
+            ['GET /users'],
+            ['/[broken(/']
+        ));
+    }
+
     public function testMatchesMultipleComponents()
     {
         // Second component matches

@@ -11,7 +11,7 @@ use Perfbase\WordPress\Support\ErrorHandler;
  * Base lifecycle class for WordPress trace profiling.
  *
  * WordPress adaptation of the Laravel AbstractProfiler pattern.
- * Each concrete class represents one request context (HTTP, AJAX, cron)
+ * Each concrete class represents one request context (HTTP, AJAX, cron, CLI)
  * with its own shouldProfile() logic and attributes.
  */
 abstract class AbstractWordPressProfiler
@@ -53,6 +53,10 @@ abstract class AbstractWordPressProfiler
         }
 
         try {
+            if (!$this->perfbase->isExtensionAvailable()) {
+                return;
+            }
+
             if (!$this->passesSampleRateCheck() || !$this->shouldProfile()) {
                 return;
             }

@@ -30,7 +30,7 @@ This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/pa
 
 ## Requirements
 
-- PHP `7.4` to `8.5`
+- PHP `7.4` to `8.6`
 - WordPress `5.0+`
 - `ext-json`
 - `ext-perfbase`
@@ -166,12 +166,13 @@ The admin page covers the common operational settings:
 - profile admin
 - profile AJAX
 - profile cron
+- profile WP-CLI
 - feature flags
+- HTTP include patterns
+- HTTP exclude patterns
 - excluded user agents
 
-The runtime also supports the richer per-context `include` and `exclude` arrays shown above. Those are the canonical filter model used by the lifecycle classes.
-
-WP-CLI profiling is supported in the runtime, but there is currently no dedicated admin toggle for it.
+The admin UI writes the same nested `include` / `exclude` structure used by the runtime. It currently exposes the HTTP filter lists directly and preserves any existing AJAX, cron, and CLI filter arrays already present in saved config.
 
 ## Feature flags
 
@@ -221,14 +222,16 @@ At a high level:
 
 The plugin also adds context through WordPress hooks such as:
 
-- request and template lifecycle hooks
-- database query hooks
 - outbound HTTP hooks
-- `wp_die` handling
 - theme and plugin lifecycle hooks
 - user, post, comment, REST API, and WooCommerce hooks when available
 
 Cache profiling itself is handled by the native Perfbase extension via feature flags rather than by WordPress cache hooks.
+
+For safety and lower cardinality:
+
+- outbound HTTP attributes are stored as sanitized `scheme://host/path` values without query strings or fragments
+- database visibility is limited to aggregate shutdown-time stats such as total query count, slow query count, and total query time
 
 ## Request metadata
 

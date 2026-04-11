@@ -43,13 +43,9 @@ class PerfbaseProfiler {
      */
     private function init() {
         // Hook into WordPress lifecycle events
-        add_action('wp', [$this, 'on_wp_ready'], 1);
-        add_action('template_redirect', [$this, 'on_template_redirect'], 1);
         add_action('wp_head', [$this, 'on_wp_head'], 999);
         add_action('wp_footer', [$this, 'on_wp_footer'], 1);
 
-        // Database profiling
-        add_filter('query', [$this, 'profile_query'], 10, 1);
         add_action('shutdown', [$this, 'add_database_stats'], 1);
 
         // Theme and plugin profiling
@@ -74,90 +70,6 @@ class PerfbaseProfiler {
         // WooCommerce profiling (if available)
         if (class_exists('WooCommerce')) {
             $this->init_woocommerce_profiling();
-        }
-    }
-
-    /**
-     * Handle wp ready
-     *
-     * @return void
-     */
-    public function on_wp_ready() {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
-        // Add WordPress context
-        $perfbase->setAttribute('wordpress.is_front_page', is_front_page() ? 'true' : 'false');
-        $perfbase->setAttribute('wordpress.is_home', is_home() ? 'true' : 'false');
-        $perfbase->setAttribute('wordpress.is_admin', is_admin() ? 'true' : 'false');
-        $perfbase->setAttribute('wordpress.is_single', is_single() ? 'true' : 'false');
-        $perfbase->setAttribute('wordpress.is_page', is_page() ? 'true' : 'false');
-
-        // Add current user context
-        if (is_user_logged_in()) {
-            $user = wp_get_current_user();
-            $perfbase->setAttribute('user.id', (string) $user->ID);
-            $perfbase->setAttribute('user.role', implode(',', $user->roles));
-        }
-
-        // Add post/page context
-        if (is_singular()) {
-            $post = get_queried_object();
-            if ($post) {
-                $perfbase->setAttribute('wordpress.post.id', (string) $post->ID);
-                $perfbase->setAttribute('wordpress.post.type', $post->post_type);
-                $perfbase->setAttribute('wordpress.post.status', $post->post_status);
-            }
-        }
-
-        // Add category/taxonomy context
-        if (is_category() || is_tag() || is_tax()) {
-            $term = get_queried_object();
-            if ($term) {
-                $perfbase->setAttribute('wordpress.term.id', (string) $term->term_id);
-                $perfbase->setAttribute('wordpress.term.taxonomy', $term->taxonomy);
-                $perfbase->setAttribute('wordpress.term.slug', $term->slug);
-            }
-        }
-    }
-
-    /**
-     * Handle template redirect
-     *
-     * @return void
-     */
-    public function on_template_redirect() {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
-        // Add template information
-        $template = get_page_template_slug();
-        if ($template) {
-            $perfbase->setAttribute('wordpress.template', $template);
-        }
-
-        // Add theme information
-        $theme = wp_get_theme();
-        $perfbase->setAttribute('wordpress.theme.name', $theme->get('Name'));
-        $perfbase->setAttribute('wordpress.theme.version', $theme->get('Version'));
-
-        // Add conditional tags
-        $conditionals = [
-            'is_404' => is_404(),
-            'is_search' => is_search(),
-            'is_archive' => is_archive(),
-            'is_attachment' => is_attachment(),
-            'is_feed' => is_feed(),
-        ];
-
-        foreach ($conditionals as $condition => $value) {
-            if ($value) {
-                $perfbase->setAttribute("wordpress.{$condition}", 'true');
-            }
         }
     }
 
@@ -187,27 +99,6 @@ class PerfbaseProfiler {
         }
 
         $perfbase->setAttribute('wordpress.wp_footer', 'reached');
-    }
-
-    /**
-     * Profile database queries
-     *
-     * @param string $query
-     * @return string
-     */
-    public function profile_query($query) {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return $query;
-        }
-
-        // Track query types
-        $query_type = $this->get_query_type($query);
-        if ($query_type) {
-            $perfbase->setAttribute("database.query.{$query_type}", 'true');
-        }
-
-        return $query;
     }
 
     /**
@@ -376,7 +267,12 @@ class PerfbaseProfiler {
         }
 
         $perfbase->setAttribute('woocommerce.active', 'true');
-        $perfbase->setAttribute('woocommerce.version', WC()->version);
+        if (function_exists('WC')) {
+            $woocommerce = WC();
+            if (is_object($woocommerce) && isset($woocommerce->version) && is_string($woocommerce->version)) {
+                $perfbase->setAttribute('woocommerce.version', $woocommerce->version);
+            }
+        }
 
         // Profile WooCommerce specific pages
         add_action('woocommerce_init', function() {
@@ -419,35 +315,5 @@ class PerfbaseProfiler {
                 $perfbase->setAttribute('woocommerce.order.created', (string) $order_id);
             }
         });
-    }
-
-    /**
-     * Get query type from SQL query
-     *
-     * @param string $query
-     * @return string|null
-     */
-    private function get_query_type($query) {
-        $query = trim(strtoupper($query));
-
-        if (strpos($query, 'SELECT') === 0) {
-            return 'select';
-        } elseif (strpos($query, 'INSERT') === 0) {
-            return 'insert';
-        } elseif (strpos($query, 'UPDATE') === 0) {
-            return 'update';
-        } elseif (strpos($query, 'DELETE') === 0) {
-            return 'delete';
-        } elseif (strpos($query, 'REPLACE') === 0) {
-            return 'replace';
-        } elseif (strpos($query, 'CREATE') === 0) {
-            return 'create';
-        } elseif (strpos($query, 'ALTER') === 0) {
-            return 'alter';
-        } elseif (strpos($query, 'DROP') === 0) {
-            return 'drop';
-        }
-
-        return null;
     }
 }

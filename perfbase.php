@@ -64,9 +64,6 @@ if (file_exists($autoloader)) {
     require_once $autoloader;
 }
 
-// Include the main plugin class
-require_once PERFBASE_PLUGIN_DIR . 'src/PerfbasePlugin.php';
-
 /**
  * Initialize the plugin
  *
@@ -115,17 +112,8 @@ function perfbase_activate() {
     }
 
     // Create default options
-    add_option('perfbase_settings', [
-        'enabled' => false,
-        'api_key' => '',
-        'sample_rate' => 0.1,
-        'flags' => 0,
-        'timeout' => 10,
-        'proxy' => '',
-    ]);
-
-    // Flush rewrite rules
-    flush_rewrite_rules();
+    $defaults = (new Perfbase\WordPress\Helpers\ConfigManager())->getDefaultConfig();
+    add_option('perfbase_settings', $defaults);
 }
 register_activation_hook(__FILE__, 'perfbase_activate');
 
@@ -133,8 +121,7 @@ register_activation_hook(__FILE__, 'perfbase_activate');
  * Plugin deactivation hook
  */
 function perfbase_deactivate() {
-    // Flush rewrite rules
-    flush_rewrite_rules();
+    // No-op: plugin does not manage rewrite rules.
 }
 register_deactivation_hook(__FILE__, 'perfbase_deactivate');
 
