@@ -272,7 +272,11 @@ class PerfbaseProfilerTest extends BaseWordPressTest
     public function testWooCommerceVersionIsGuardedWhenSingletonUnavailable()
     {
         if (!class_exists('WooCommerce')) {
-            class_alias(\stdClass::class, 'WooCommerce');
+            if (!class_exists('PerfbaseTestWooCommerceStub', false)) {
+                eval('class PerfbaseTestWooCommerceStub {}');
+            }
+
+            class_alias('PerfbaseTestWooCommerceStub', 'WooCommerce');
         }
 
         if (!function_exists('WC')) {
