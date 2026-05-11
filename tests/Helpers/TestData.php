@@ -332,7 +332,7 @@ class TestData
                 'profile_ajax' => '1',
                 'profile_cron' => '1',
                 'flags' => [
-                    (string) FeatureFlags::UseCoarseClock,
+                    (string) FeatureFlags::UsePreciseClock,
                     (string) FeatureFlags::TrackCpuTime,
                     (string) FeatureFlags::TrackPdo
                 ],
@@ -384,34 +384,45 @@ class TestData
             'default_flags' => [
                 'flags' => FeatureFlags::DefaultFlags,
                 'expected' => [
-                    'UseCoarseClock',
-                    'TrackCpuTime',
+                    'UsePreciseClock',
+                    'TrackWallTime',
                     'TrackPdo',
                     'TrackHttp',
                     'TrackCaches',
                     'TrackMongodb',
                     'TrackElasticsearch',
-                    'TrackQueues',
-                    'TrackAwsSdk'
+                    'TrackProcessList',
+                    'TrackErrors',
+                    'TrackMagicMethods',
+                    'TrackOpcache'
                 ]
             ],
             'all_flags' => [
                 'flags' => FeatureFlags::AllFlags,
                 'expected' => [
-                    'UseCoarseClock',
+                    'UsePreciseClock',
+                    'TrackWallTime',
+                    'TrackCpuTime',
+                    'TrackMemoryAllocation',
+                    'TrackArguments',
                     'TrackExceptions',
                     'TrackFileCompilation',
-                    'TrackMemoryAllocation',
-                    'TrackCpuTime',
                     'TrackFileDefinitions',
+                    'TrackSessions',
+                    'TrackSerialization',
+                    'TrackRegex',
                     'TrackPdo',
-                    'TrackHttp',
-                    'TrackCaches',
                     'TrackMongodb',
                     'TrackElasticsearch',
-                    'TrackQueues',
-                    'TrackAwsSdk',
-                    'TrackFileOperations'
+                    'TrackCaches',
+                    'TrackHttp',
+                    'TrackMail',
+                    'TrackFileOperations',
+                    'TrackProc',
+                    'TrackProcessList',
+                    'TrackErrors',
+                    'TrackMagicMethods',
+                    'TrackOpcache'
                 ]
             ],
             'single_flag' => [

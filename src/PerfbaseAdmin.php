@@ -579,15 +579,29 @@ class PerfbaseAdmin {
         $current_flags = (int) ($config['flags'] ?? FeatureFlags::DefaultFlags);
 
         $available_flags = [
-            FeatureFlags::UseCoarseClock => __('Use Coarse Clock (faster, less accurate)', 'perfbase'),
+            FeatureFlags::UsePreciseClock => __('Use Precise Clock', 'perfbase'),
+            FeatureFlags::TrackWallTime => __('Track Wall Time', 'perfbase'),
             FeatureFlags::TrackCpuTime => __('Track CPU Time', 'perfbase'),
+            FeatureFlags::TrackMemoryAllocation => __('Track Memory Allocation', 'perfbase'),
+            FeatureFlags::TrackArguments => __('Track Function Arguments', 'perfbase'),
+            FeatureFlags::TrackExceptions => __('Track Exceptions', 'perfbase'),
+            FeatureFlags::TrackFileCompilation => __('Track File Compilation', 'perfbase'),
+            FeatureFlags::TrackFileDefinitions => __('Track File Definitions', 'perfbase'),
+            FeatureFlags::TrackSessions => __('Track Sessions', 'perfbase'),
+            FeatureFlags::TrackSerialization => __('Track Serialization', 'perfbase'),
+            FeatureFlags::TrackRegex => __('Track Regex Operations', 'perfbase'),
             FeatureFlags::TrackPdo => __('Track Database Operations', 'perfbase'),
-            FeatureFlags::TrackHttp => __('Track HTTP Requests', 'perfbase'),
-            FeatureFlags::TrackCaches => __('Track Cache Operations', 'perfbase'),
             FeatureFlags::TrackMongodb => __('Track MongoDB Operations', 'perfbase'),
             FeatureFlags::TrackElasticsearch => __('Track Elasticsearch Operations', 'perfbase'),
-            FeatureFlags::TrackQueues => __('Track Queue Operations', 'perfbase'),
+            FeatureFlags::TrackCaches => __('Track Cache Operations', 'perfbase'),
+            FeatureFlags::TrackHttp => __('Track HTTP Requests', 'perfbase'),
+            FeatureFlags::TrackMail => __('Track Mail Operations', 'perfbase'),
             FeatureFlags::TrackFileOperations => __('Track File Operations', 'perfbase'),
+            FeatureFlags::TrackProc => __('Track Process Execution', 'perfbase'),
+            FeatureFlags::TrackProcessList => __('Track Process List', 'perfbase'),
+            FeatureFlags::TrackErrors => __('Track PHP Errors', 'perfbase'),
+            FeatureFlags::TrackMagicMethods => __('Track Magic Methods', 'perfbase'),
+            FeatureFlags::TrackOpcache => __('Track OPcache Stats', 'perfbase'),
         ];
 
         echo '<fieldset>';
@@ -698,10 +712,10 @@ class PerfbaseAdmin {
         $flags = 0;
         if (!empty($input['flags']) && is_array($input['flags'])) {
             foreach ($input['flags'] as $flag) {
-                $flags |= (((int) $flag) & FeatureFlags::AllFlags);
+                $flags |= (((int) $flag) & FeatureFlags::ValidFlagsMask);
             }
         }
-        $sanitized['flags'] = $flags & FeatureFlags::AllFlags;
+        $sanitized['flags'] = $flags & FeatureFlags::ValidFlagsMask;
 
         $sanitized['include'] = $this->sanitizeContextFilters(
             is_array($existing['include'] ?? null) ? $existing['include'] : [],

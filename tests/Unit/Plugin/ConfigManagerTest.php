@@ -251,7 +251,7 @@ class ConfigManagerTest extends BaseWordPressTest
     public function testValidateConfigInvalidFlagsTooHigh()
     {
         $config = TestData::getValidConfig();
-        $config['flags'] = FeatureFlags::AllFlags + 1;
+        $config['flags'] = FeatureFlags::ValidFlagsMask | (1 << 30);
 
         $errors = $this->config_manager->validateConfig($config);
 

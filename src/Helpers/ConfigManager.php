@@ -295,7 +295,7 @@ class ConfigManager
         }
 
         $flags = (int) ($config['flags'] ?? 0);
-        if ($flags < 0 || $flags > FeatureFlags::AllFlags) {
+        if ($flags < 0 || ($flags & ~FeatureFlags::ValidFlagsMask) !== 0) {
             $errors['flags'] = 'Invalid flags value';
         }
 
