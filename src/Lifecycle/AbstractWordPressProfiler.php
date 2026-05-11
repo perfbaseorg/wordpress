@@ -4,6 +4,7 @@ namespace Perfbase\WordPress\Lifecycle;
 
 use Perfbase\SDK\Exception\PerfbaseException;
 use Perfbase\SDK\Perfbase;
+use Perfbase\WordPress\Helpers\ConfigManager;
 use Perfbase\WordPress\PerfbasePlugin;
 use Perfbase\WordPress\Support\ErrorHandler;
 
@@ -29,6 +30,8 @@ abstract class AbstractWordPressProfiler
 
     /** @var array<string, mixed> */
     protected array $config;
+
+    protected ?int $httpStatusCode = null;
 
     /**
      * @param string $spanName
@@ -89,6 +92,11 @@ abstract class AbstractWordPressProfiler
                 return;
             }
 
+            if (!$this->shouldSubmitTrace()) {
+                $this->perfbase->reset();
+                return;
+            }
+
             $result = $this->perfbase->submitTrace();
 
             if (!$result->isSuccess()) {
@@ -130,6 +138,21 @@ abstract class AbstractWordPressProfiler
         foreach ($attributes as $key => $value) {
             $this->setAttribute($key, (string) $value);
         }
+    }
+
+    /**
+     * Set final request attributes and capture the response code for submission filtering.
+     *
+     * @param array<string, mixed> $attributes
+     * @return void
+     */
+    protected function setFinalAttributes(array $attributes): void
+    {
+        if (isset($attributes['http_status_code']) && ctype_digit((string) $attributes['http_status_code'])) {
+            $this->httpStatusCode = (int) $attributes['http_status_code'];
+        }
+
+        $this->setAttributes($attributes);
     }
 
     /**
@@ -189,4 +212,23 @@ abstract class AbstractWordPressProfiler
      * @return bool
      */
     abstract protected function shouldProfile(): bool;
+
+    /**
+     * Determine if the current trace should be submitted after it stops.
+     *
+     * @return bool
+     */
+    protected function shouldSubmitTrace(): bool
+    {
+        if ($this->httpStatusCode === null) {
+            return true;
+        }
+
+        $allowedStatusCodes = ConfigManager::normalizeHttpStatusCodes(
+            $this->config['profile_http_status_codes'] ?? ConfigManager::getDefaultHttpStatusCodes(),
+            ConfigManager::getDefaultHttpStatusCodes()
+        );
+
+        return in_array($this->httpStatusCode, $allowedStatusCodes, true);
+    }
 }

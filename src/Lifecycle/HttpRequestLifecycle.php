@@ -58,6 +58,6 @@ class HttpRequestLifecycle extends AbstractWordPressProfiler
      */
     public function addFinalAttributes(): void
     {
-        $this->setAttributes($this->requestContext->getFinalAttributes());
+        $this->setFinalAttributes($this->requestContext->getFinalAttributes());
     }
 }

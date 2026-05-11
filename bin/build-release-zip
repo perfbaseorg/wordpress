@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_SLUG="perfbase"
+VERSION="$(php -r '$contents = file_get_contents($argv[1]); if (preg_match("/Version:\\s*([0-9.]+)/", $contents, $m)) { echo $m[1]; exit(0); } exit(1);' "$ROOT_DIR/perfbase.php")"
+DIST_DIR="$ROOT_DIR/dist"
+ZIP_PATH="$DIST_DIR/${PLUGIN_SLUG}-${VERSION}.zip"
+TMP_DIR="$(mktemp -d)"
+STAGE_DIR="$TMP_DIR/$PLUGIN_SLUG"
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+require_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Required command not found: $1" >&2
+        exit 1
+    fi
+}
+
+require_command composer
+require_command php
+require_command rsync
+require_command zip
+
+mkdir -p "$STAGE_DIR" "$DIST_DIR"
+
+rsync -a \
+    "$ROOT_DIR/perfbase.php" \
+    "$ROOT_DIR/README.md" \
+    "$ROOT_DIR/readme.txt" \
+    "$ROOT_DIR/LICENSE.txt" \
+    "$ROOT_DIR/composer.json" \
+    "$ROOT_DIR/composer.lock" \
+    "$ROOT_DIR/src" \
+    "$ROOT_DIR/assets" \
+    "$STAGE_DIR/"
+
+(
+    cd "$STAGE_DIR"
+    COMPOSER_ROOT_VERSION="$VERSION" composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+    rm -f composer.json composer.lock
+    rm -rf vendor/bin
+    find vendor -type d \( -name .git -o -name .github -o -name tests -o -name test -o -name Test -o -name examples \) -prune -exec rm -rf {} +
+    find vendor -type f \( -name phpunit.xml -o -name phpstan.neon -o -name .gitignore -o -name .dockerignore -o -name Dockerfile -o -name 'docker-compose*.yml' -o -name 'test*.sh' -o -name package-lock.json \) -delete
+)
+
+rm -f "$ZIP_PATH"
+(
+    cd "$TMP_DIR"
+    zip -qr "$ZIP_PATH" "$PLUGIN_SLUG"
+)
+
+echo "$ZIP_PATH"

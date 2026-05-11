@@ -37,6 +37,7 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertArrayHasKey('profile_ajax', $default_config);
         $this->assertArrayHasKey('profile_cron', $default_config);
         $this->assertArrayHasKey('profile_cli', $default_config);
+        $this->assertArrayHasKey('profile_http_status_codes', $default_config);
         $this->assertArrayHasKey('include', $default_config);
         $this->assertArrayHasKey('exclude', $default_config);
         $this->assertArrayHasKey('exclude_user_agents', $default_config);
@@ -55,6 +56,7 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertTrue($default_config['profile_ajax']);
         $this->assertTrue($default_config['profile_cron']);
         $this->assertFalse($default_config['profile_cli']);
+        $this->assertEquals(array_merge(range(200, 299), range(500, 599)), $default_config['profile_http_status_codes']);
         $this->assertFalse($default_config['debug']);
         $this->assertTrue($default_config['log_errors']);
         $this->assertIsArray($default_config['include']);
@@ -93,6 +95,17 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertEquals(0.5, $config['sample_rate']);
         // Should still have defaults for other values
         $this->assertEquals('https://ingress.perfbase.cloud', $config['api_url']);
+    }
+
+    public function testGetConfigNormalizesProfileHttpStatusCodes()
+    {
+        Functions\when('get_option')->justReturn([
+            'profile_http_status_codes' => '200-202, 404',
+        ]);
+
+        $config = $this->config_manager->getConfig();
+
+        $this->assertEquals([200, 201, 202, 404], $config['profile_http_status_codes']);
     }
 
     public function testGetConfigMigratesLegacyExcludedPaths()
@@ -297,6 +310,19 @@ class ConfigManagerTest extends BaseWordPressTest
 
         // The constant should override the default
         $this->assertEquals(42, $config['timeout']);
+    }
+
+    public function testApplyConstantsOverridesProfileHttpStatusCodes()
+    {
+        if (!defined('PERFBASE_PROFILE_HTTP_STATUS_CODES')) {
+            define('PERFBASE_PROFILE_HTTP_STATUS_CODES', '204, 400-401');
+        }
+
+        Functions\when('get_option')->justReturn([]);
+
+        $config = $this->config_manager->getConfig();
+
+        $this->assertEquals([204, 400, 401], $config['profile_http_status_codes']);
     }
 
     public function testGetDefaultConfigHasNewKeys()

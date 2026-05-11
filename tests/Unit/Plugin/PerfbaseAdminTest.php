@@ -83,6 +83,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
             'profile_ajax' => '1',
             'profile_cron' => '1',
             'profile_cli' => '',
+            'profile_http_status_codes' => '200-202, 404',
             'flags' => [FeatureFlags::TrackPdo, FeatureFlags::TrackHttp],
             'include_http' => "/\n/wp-json/*",
             'exclude_http' => "/wp-admin/\n/wp-cron.php",
@@ -102,6 +103,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertTrue($result['profile_admin']);
         $this->assertTrue($result['profile_ajax']);
         $this->assertFalse($result['profile_cli']);
+        $this->assertEquals([200, 201, 202, 404], $result['profile_http_status_codes']);
         $this->assertIsInt($result['flags']);
         $this->assertEquals(['/', '/wp-json/*'], $result['include']['http']);
         $this->assertEquals(['/wp-admin/', '/wp-cron.php'], $result['exclude']['http']);
@@ -158,6 +160,19 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertEquals('https://ingress.perfbase.cloud', $result['api_url']);
         $this->assertEquals(0.1, $result['sample_rate']);
         $this->assertEquals(10, $result['timeout']);
+        $this->assertEquals(array_merge(range(200, 299), range(500, 599)), $result['profile_http_status_codes']);
+    }
+
+    public function testSanitizeSettingsAllowsDisablingHttpStatusSubmission()
+    {
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $this->admin->sanitize_settings([
+            'profile_http_status_codes' => '',
+        ]);
+
+        $this->assertSame([], $result['profile_http_status_codes']);
     }
 
     public function testSanitizeSettingsStripsWhitespaceFromExclusions()
@@ -369,6 +384,19 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertStringContainsString('type="checkbox"', $output);
         $this->assertStringContainsString('name="perfbase_settings[profile_cli]"', $output);
+    }
+
+    public function testRenderProfileHttpStatusCodesFieldShowsCompressedRanges()
+    {
+        Functions\when('esc_attr')->returnArg();
+
+        ob_start();
+        $this->admin->render_profile_http_status_codes_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('type="text"', $output);
+        $this->assertStringContainsString('name="perfbase_settings[profile_http_status_codes]"', $output);
+        $this->assertStringContainsString('value="200-299, 500-599"', $output);
     }
 
     public function testRenderSampleRateFieldHasValidation()

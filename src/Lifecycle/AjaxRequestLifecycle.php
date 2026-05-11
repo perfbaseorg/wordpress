@@ -2,6 +2,7 @@
 
 namespace Perfbase\WordPress\Lifecycle;
 
+use Perfbase\WordPress\Helpers\RequestContext;
 use Perfbase\WordPress\PerfbasePlugin;
 use Perfbase\WordPress\Support\FilterMatcher;
 
@@ -13,9 +14,13 @@ class AjaxRequestLifecycle extends AbstractWordPressProfiler
     /** @var string */
     private string $action;
 
-    public function __construct(string $action, PerfbasePlugin $plugin)
+    /** @var RequestContext|null */
+    private ?RequestContext $requestContext;
+
+    public function __construct(string $action, PerfbasePlugin $plugin, ?RequestContext $requestContext = null)
     {
         $this->action = self::normalizeAction($action);
+        $this->requestContext = $requestContext;
         parent::__construct("ajax.{$this->action}", $plugin);
     }
 
@@ -42,6 +47,20 @@ class AjaxRequestLifecycle extends AbstractWordPressProfiler
             'action' => "ajax.{$this->action}",
             'ajax.action' => $this->action,
         ]);
+    }
+
+    /**
+     * Add final request attributes before submission.
+     *
+     * @return void
+     */
+    public function addFinalAttributes(): void
+    {
+        if (!$this->requestContext) {
+            return;
+        }
+
+        $this->setFinalAttributes($this->requestContext->getFinalAttributes());
     }
 
     /**

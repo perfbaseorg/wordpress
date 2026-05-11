@@ -5,6 +5,7 @@
 /CLAUDE.md export-ignore
 /coverage export-ignore
 /coverage.xml export-ignore
+/dist export-ignore
 /patchwork.json export-ignore
 /phpstan.neon export-ignore
 /phpunit.xml export-ignore

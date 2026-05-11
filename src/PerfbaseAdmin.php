@@ -8,6 +8,7 @@
 namespace Perfbase\WordPress;
 
 use Perfbase\SDK\FeatureFlags;
+use Perfbase\WordPress\Helpers\ConfigManager;
 
 /**
  * Admin interface for Perfbase plugin
@@ -169,6 +170,14 @@ class PerfbaseAdmin {
             'profile_cli',
             __('Profile WP-CLI Commands', 'perfbase'),
             [$this, 'render_profile_cli_field'],
+            'perfbase-settings',
+            'perfbase_profiling'
+        );
+
+        add_settings_field(
+            'profile_http_status_codes',
+            __('Profile HTTP Status Codes', 'perfbase'),
+            [$this, 'render_profile_http_status_codes_field'],
             'perfbase-settings',
             'perfbase_profiling'
         );
@@ -541,6 +550,26 @@ class PerfbaseAdmin {
     }
 
     /**
+     * Render profile HTTP status codes field
+     *
+     * @return void
+     */
+    public function render_profile_http_status_codes_field() {
+        $config = $this->plugin->get_config();
+        $statusCodes = ConfigManager::normalizeHttpStatusCodes(
+            $config['profile_http_status_codes'] ?? ConfigManager::getDefaultHttpStatusCodes(),
+            ConfigManager::getDefaultHttpStatusCodes()
+        );
+        $value = $this->formatHttpStatusCodes($statusCodes);
+        ?>
+        <input type="text" name="perfbase_settings[profile_http_status_codes]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
+        <p class="description">
+            <?php _e('Comma-separated HTTP status codes or ranges to submit. Example: 200-299, 404. Leave empty to drop all HTTP submissions.', 'perfbase'); ?>
+        </p>
+        <?php
+    }
+
+    /**
      * Render flags field
      *
      * @return void
@@ -653,6 +682,17 @@ class PerfbaseAdmin {
         $sanitized['profile_ajax'] = !empty($input['profile_ajax']);
         $sanitized['profile_cron'] = !empty($input['profile_cron']);
         $sanitized['profile_cli'] = !empty($input['profile_cli']);
+        if (array_key_exists('profile_http_status_codes', $input)) {
+            $sanitized['profile_http_status_codes'] = ConfigManager::normalizeHttpStatusCodes(
+                $input['profile_http_status_codes'],
+                []
+            );
+        } else {
+            $sanitized['profile_http_status_codes'] = ConfigManager::normalizeHttpStatusCodes(
+                $existing['profile_http_status_codes'] ?? ConfigManager::getDefaultHttpStatusCodes(),
+                ConfigManager::getDefaultHttpStatusCodes()
+            );
+        }
 
         // Flags
         $flags = 0;
@@ -680,6 +720,46 @@ class PerfbaseAdmin {
         );
 
         return $sanitized;
+    }
+
+    /**
+     * Format HTTP status codes for display in the admin UI.
+     *
+     * @param array<int, int> $statusCodes
+     * @return string
+     */
+    private function formatHttpStatusCodes(array $statusCodes): string
+    {
+        $statusCodes = ConfigManager::normalizeHttpStatusCodes($statusCodes, []);
+        if (empty($statusCodes)) {
+            return '';
+        }
+
+        $ranges = [];
+        $rangeStart = $statusCodes[0];
+        $previous = $statusCodes[0];
+
+        for ($i = 1, $count = count($statusCodes); $i < $count; $i++) {
+            $current = $statusCodes[$i];
+
+            if ($current === $previous + 1) {
+                $previous = $current;
+                continue;
+            }
+
+            $ranges[] = $rangeStart === $previous
+                ? (string) $rangeStart
+                : sprintf('%d-%d', $rangeStart, $previous);
+
+            $rangeStart = $current;
+            $previous = $current;
+        }
+
+        $ranges[] = $rangeStart === $previous
+            ? (string) $rangeStart
+            : sprintf('%d-%d', $rangeStart, $previous);
+
+        return implode(', ', $ranges);
     }
 
     /**

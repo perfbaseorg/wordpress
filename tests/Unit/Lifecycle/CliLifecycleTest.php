@@ -41,13 +41,13 @@ class CliLifecycleTest extends BaseWordPressTest
     public function testSpanName()
     {
         $lifecycle = $this->createCliLifecycle('cache-flush');
-        $this->assertEquals('cli.cache-flush', $lifecycle->getSpanName());
+        $this->assertEquals('cli_cache_flush', $lifecycle->getSpanName());
     }
 
     public function testSpanNameWithDifferentCommand()
     {
         $lifecycle = $this->createCliLifecycle('db-export');
-        $this->assertEquals('cli.db-export', $lifecycle->getSpanName());
+        $this->assertEquals('cli_db_export', $lifecycle->getSpanName());
     }
 
     public function testStartProfilingSetsAttributes()
@@ -58,7 +58,7 @@ class CliLifecycleTest extends BaseWordPressTest
         $mock_perfbase->shouldReceive('isExtensionAvailable')->andReturn(true);
 
         $mock_perfbase->shouldReceive('startTraceSpan')
-            ->with('cli.cache-flush')
+            ->with('cli_cache_flush')
             ->once();
 
         $mock_perfbase->shouldReceive('setAttribute')
@@ -71,6 +71,14 @@ class CliLifecycleTest extends BaseWordPressTest
         $lifecycle->startProfiling();
 
         $this->addToAssertionCount(1);
+    }
+
+    public function testSpanNameIsSdkSafe()
+    {
+        $lifecycle = $this->createCliLifecycle('option get perfbase_settings --format=json');
+
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]{1,64}$/', $lifecycle->getSpanName());
+        $this->assertLessThanOrEqual(64, strlen($lifecycle->getSpanName()));
     }
 
     public function testShouldNotProfileWhenProfileCliDisabled()

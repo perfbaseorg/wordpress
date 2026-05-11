@@ -25,6 +25,22 @@ class ConcreteTestProfiler extends AbstractWordPressProfiler
     }
 }
 
+class ConditionalSubmitTestProfiler extends AbstractWordPressProfiler
+{
+    /** @var bool */
+    public bool $shouldSubmitTraceResult = true;
+
+    protected function shouldProfile(): bool
+    {
+        return true;
+    }
+
+    protected function shouldSubmitTrace(): bool
+    {
+        return $this->shouldSubmitTraceResult;
+    }
+}
+
 class AbstractWordPressProfilerTest extends BaseWordPressTest
 {
     /** @var Perfbase&\Mockery\MockInterface */
@@ -153,6 +169,19 @@ class AbstractWordPressProfilerTest extends BaseWordPressTest
         $profiler->stopProfiling();
 
         $this->assertTrue(true);
+    }
+
+    public function testStopProfilingResetsWithoutSubmittingWhenTraceShouldBeDropped(): void
+    {
+        $this->mockPerfbase->shouldReceive('stopTraceSpan')->with('test.span')->andReturn(true)->once();
+        $this->mockPerfbase->shouldNotReceive('submitTrace');
+        $this->mockPerfbase->shouldReceive('reset')->once();
+
+        $profiler = new ConditionalSubmitTestProfiler('test.span', $this->mockPlugin);
+        $profiler->shouldSubmitTraceResult = false;
+        $profiler->stopProfiling();
+
+        $this->addToAssertionCount(1);
     }
 
     public function testSetAttributeAccumulates(): void

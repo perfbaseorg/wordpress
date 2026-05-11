@@ -24,6 +24,7 @@ class TestData
             'flags' => FeatureFlags::DefaultFlags,
             'timeout' => 10,
             'proxy' => '',
+            'profile_http_status_codes' => array_merge(range(200, 299), range(500, 599)),
             'profile_admin' => false,
             'profile_ajax' => true,
             'profile_cron' => true,

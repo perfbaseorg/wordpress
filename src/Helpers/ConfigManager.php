@@ -10,6 +10,16 @@ use Perfbase\SDK\FeatureFlags;
 class ConfigManager
 {
     /**
+     * Get the default HTTP status codes that should be submitted.
+     *
+     * @return array<int, int>
+     */
+    public static function getDefaultHttpStatusCodes(): array
+    {
+        return array_merge(range(200, 299), range(500, 599));
+    }
+
+    /**
      * Get plugin configuration from WordPress options
      *
      * @return array
@@ -30,8 +40,92 @@ class ConfigManager
 
         // wp-config.php constants override everything (highest priority)
         $config = $this->applyConstants($config);
+        $config['profile_http_status_codes'] = self::normalizeHttpStatusCodes(
+            $config['profile_http_status_codes'] ?? self::getDefaultHttpStatusCodes(),
+            $defaults['profile_http_status_codes']
+        );
 
         return $config;
+    }
+
+    /**
+     * Normalize configured HTTP status codes into a unique ascending integer list.
+     *
+     * Supports arrays, comma/newline-separated strings, and ranges like 200-299.
+     *
+     * @param mixed $value
+     * @param array<int, int> $fallback
+     * @return array<int, int>
+     */
+    public static function normalizeHttpStatusCodes($value, array $fallback = []): array
+    {
+        if ($value === null) {
+            return $fallback;
+        }
+
+        if (is_array($value)) {
+            $tokens = $value;
+        } elseif (is_int($value)) {
+            $tokens = [$value];
+        } elseif (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+
+            $trimmed = trim($trimmed, '[]');
+            $tokens = preg_split('/[\r\n,]+/', $trimmed);
+            if (!is_array($tokens)) {
+                return $fallback;
+            }
+        } else {
+            return $fallback;
+        }
+
+        $statusCodes = [];
+
+        foreach ($tokens as $token) {
+            if (is_int($token)) {
+                if ($token >= 100 && $token <= 599) {
+                    $statusCodes[] = $token;
+                }
+                continue;
+            }
+
+            if (!is_string($token)) {
+                continue;
+            }
+
+            $token = trim($token);
+            if ($token === '') {
+                continue;
+            }
+
+            if (preg_match('/^(\d{3})\s*-\s*(\d{3})$/', $token, $matches) === 1) {
+                $start = (int) $matches[1];
+                $end = (int) $matches[2];
+
+                if ($start >= 100 && $end <= 599 && $start <= $end) {
+                    foreach (range($start, $end) as $statusCode) {
+                        $statusCodes[] = $statusCode;
+                    }
+                }
+
+                continue;
+            }
+
+            if (ctype_digit($token)) {
+                $statusCode = (int) $token;
+                if ($statusCode >= 100 && $statusCode <= 599) {
+                    $statusCodes[] = $statusCode;
+                }
+            }
+        }
+
+        $statusCodes = array_values(array_unique($statusCodes));
+        sort($statusCodes);
+
+        return $statusCodes;
     }
 
     /**
@@ -54,6 +148,7 @@ class ConfigManager
             'PERFBASE_FLAGS'       => 'flags',
             'PERFBASE_TIMEOUT'     => 'timeout',
             'PERFBASE_PROXY'       => 'proxy',
+            'PERFBASE_PROFILE_HTTP_STATUS_CODES' => 'profile_http_status_codes',
         ];
 
         foreach ($constantMap as $constant => $key) {
@@ -132,6 +227,7 @@ class ConfigManager
             'flags' => FeatureFlags::DefaultFlags,
             'timeout' => 10,
             'proxy' => '',
+            'profile_http_status_codes' => self::getDefaultHttpStatusCodes(),
             'profile_admin' => false,
             'profile_ajax' => true,
             'profile_cron' => true,

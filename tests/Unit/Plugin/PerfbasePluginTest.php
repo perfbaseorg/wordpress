@@ -224,6 +224,32 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertInstanceOf(HttpRequestLifecycle::class, $lifecycle);
     }
 
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitSkipsWpCliWhenCliProfilingIsDisabled()
+    {
+        if (!defined('WP_CLI')) {
+            define('WP_CLI', true);
+        }
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_cli'] = false;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase->shouldNotReceive('isExtensionAvailable');
+        $mock_perfbase->shouldNotReceive('startTraceSpan');
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
     public function testOnInitWithExceptionHandledGracefully()
     {
         $config = TestData::getValidConfig();
@@ -375,6 +401,174 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
+    public function testOnShutdownSkipsSubmittingForDisallowedHttpStatusByDefault()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
+
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->once()
+            ->andReturn(['http_status_code' => '404']);
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('wordpress.request')
+            ->once()
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldNotReceive('submitTrace');
+
+        $mock_perfbase
+            ->shouldReceive('reset')
+            ->once();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+        $this->plugin->on_shutdown();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
+    public function testOnShutdownSubmitsForConfigured404Status()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_http_status_codes'] = [200, 404];
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
+
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->once()
+            ->andReturn(['http_status_code' => '404']);
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('wordpress.request')
+            ->once()
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('submitTrace')
+            ->once()
+            ->andReturn(SubmitResult::success());
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+        $this->plugin->on_shutdown();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
+    public function testOnShutdownSubmitsForAllowed500StatusByDefault()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $this->mock_request_context
+            ->shouldReceive('getSpanName')
+            ->andReturn('wordpress.request');
+
+        $this->mock_request_context
+            ->shouldReceive('shouldProfileRequest')
+            ->andReturn(true);
+
+        $this->mock_request_context
+            ->shouldReceive('getRequestAttributes')
+            ->andReturn([]);
+
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->once()
+            ->andReturn(['http_status_code' => '503']);
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('wordpress.request')
+            ->once()
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('submitTrace')
+            ->once()
+            ->andReturn(SubmitResult::success());
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+        $this->plugin->on_shutdown();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
     public function testOnShutdownWithNoActiveLifecycle()
     {
         // on_shutdown with no active lifecycle should do nothing
@@ -444,6 +638,48 @@ class PerfbasePluginTest extends BaseWordPressTest
         $lifecycle->startProfiling();
 
         $this->assertSame('ajax.load_more_posts', $lifecycle->getSpanName());
+    }
+
+    public function testOnShutdownSkipsSubmittingForDisallowedAjaxHttpStatusByDefault()
+    {
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_ajax'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $this->mock_request_context
+            ->shouldReceive('getFinalAttributes')
+            ->once()
+            ->andReturn(['http_status_code' => '404']);
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $mock_perfbase
+            ->shouldReceive('stopTraceSpan')
+            ->with('ajax.test_action')
+            ->once()
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldNotReceive('submitTrace');
+
+        $mock_perfbase
+            ->shouldReceive('reset')
+            ->once();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+        $this->setPrivateProperty(
+            $this->plugin,
+            'active_lifecycle',
+            new AjaxRequestLifecycle('test_action', $this->plugin, $this->mock_request_context)
+        );
+
+        $this->plugin->on_shutdown();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
     public function testOnInitCreatesCronLifecycleWhenDoingCron()

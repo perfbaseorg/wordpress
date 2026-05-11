@@ -15,7 +15,7 @@ class CliLifecycle extends AbstractWordPressProfiler
 
     public function __construct(string $command, PerfbasePlugin $plugin)
     {
-        parent::__construct("cli.{$command}", $plugin);
+        parent::__construct('cli_' . self::normalizeSpanIdentifier($command), $plugin);
         $this->command = $command;
     }
 
@@ -42,5 +42,14 @@ class CliLifecycle extends AbstractWordPressProfiler
             'action' => "cli.{$this->command}",
             'cli.command' => $this->command,
         ]);
+    }
+
+    private static function normalizeSpanIdentifier(string $identifier): string
+    {
+        $identifier = strtolower($identifier);
+        $identifier = preg_replace('/[^a-z0-9]+/', '_', $identifier) ?? 'unknown';
+        $identifier = trim($identifier, '_');
+
+        return substr($identifier !== '' ? $identifier : 'unknown', 0, 60);
     }
 }

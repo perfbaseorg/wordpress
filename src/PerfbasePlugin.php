@@ -219,6 +219,10 @@ class PerfbasePlugin {
     public function on_init(): void
     {
         $lifecycle = $this->createLifecycleForContext();
+        if ($lifecycle === null) {
+            return;
+        }
+
         $lifecycle->startProfiling();
         $this->active_lifecycle = $lifecycle;
     }
@@ -247,7 +251,7 @@ class PerfbasePlugin {
         }
 
         try {
-            if ($this->active_lifecycle instanceof HttpRequestLifecycle) {
+            if (method_exists($this->active_lifecycle, 'addFinalAttributes')) {
                 $this->active_lifecycle->addFinalAttributes();
             }
 
@@ -262,13 +266,17 @@ class PerfbasePlugin {
     /**
      * Detect the current WordPress context and create the appropriate lifecycle.
      *
-     * @return AbstractWordPressProfiler
+     * @return AbstractWordPressProfiler|null
      */
-    private function createLifecycleForContext(): AbstractWordPressProfiler
+    private function createLifecycleForContext(): ?AbstractWordPressProfiler
     {
+        if (defined('WP_CLI') && WP_CLI && empty($this->config['profile_cli'])) {
+            return null;
+        }
+
         // AJAX requests (detected via DOING_AJAX constant)
         if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
-            return new AjaxRequestLifecycle((string) ($_REQUEST['action'] ?? 'unknown'), $this);
+            return new AjaxRequestLifecycle((string) ($_REQUEST['action'] ?? 'unknown'), $this, $this->request_context);
         }
 
         // Cron requests (detected via DOING_CRON constant)
