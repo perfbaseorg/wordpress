@@ -14,7 +14,7 @@
     "source": "https://github.com/perfbaseorg/wordpress"
   },
   "type": "wordpress-plugin",
-  "license": "Apache-2.0",
+  "license": "GPL-2.0-or-later",
   "authors": [
     {
       "name": "Ben Poulson",
@@ -22,9 +22,10 @@
     }
   ],
   "require": {
-    "php": ">=7.4 <8.6",
+    "php": ">=7.4 <8.5",
+    "ext-curl": "*",
     "ext-json": "*",
-    "perfbase/php-sdk": "1.0.0"
+    "perfbase/php-sdk": "^1.0"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",
@@ -47,7 +48,7 @@
   "scripts": {
     "lint": "composer run-script phpstan && composer run-script phpcs",
     "phpstan": "phpstan analyse --memory-limit=2G",
-    "phpcs": "phpcs --standard=WordPress src/",
+    "phpcs": "phpcs --standard=Generic --sniffs=Generic.PHP.Syntax src/",
     "test": "phpunit"
   },
   "extra": {

@@ -30,8 +30,9 @@ This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/pa
 
 ## Requirements
 
-- PHP `7.4` to `8.6`
+- PHP `7.4` to `8.5`
 - WordPress `5.0+`
+- `ext-curl`
 - `ext-json`
 - `ext-perfbase`
 
@@ -45,12 +46,16 @@ composer require perfbase/wordpress:^1.0
 
 This is the best fit for Bedrock-style or otherwise Composer-managed WordPress projects.
 
-### Classic WordPress installs
+### WordPress.org, GitHub Releases, or classic WordPress installs
 
-Until there is a WordPress.org distribution, install the plugin manually:
+Install the plugin from WordPress.org when available, or upload the `perfbase-<version>.zip` asset from GitHub Releases through the WordPress admin plugin installer.
+
+Do not use GitHub's automatically generated "Source code" archives for a classic WordPress install. Those archives are source snapshots for developers and do not include production Composer dependencies.
+
+For manual source installation:
 
 1. Copy or download this package into `wp-content/plugins/perfbase`
-2. Run `composer install --no-dev` inside the plugin directory
+2. Run `composer install --no-dev --optimize-autoloader` inside the plugin directory if you are installing from source
 3. Activate the plugin in the WordPress admin
 
 ### Install the Perfbase extension
@@ -108,6 +113,7 @@ Configuration priority is:
 | `timeout` | `10` | Submission timeout in seconds |
 | `proxy` | `''` | Optional outbound proxy |
 | `flags` | `FeatureFlags::DefaultFlags` | Perfbase extension flags |
+| `profile_http_status_codes` | `array_merge(range(200, 299), range(500, 599))` | HTTP response codes that should be submitted |
 
 ### Context toggles
 
@@ -167,12 +173,15 @@ The admin page covers the common operational settings:
 - profile AJAX
 - profile cron
 - profile WP-CLI
+- HTTP status codes to submit
 - feature flags
 - HTTP include patterns
 - HTTP exclude patterns
 - excluded user agents
 
 The admin UI writes the same nested `include` / `exclude` structure used by the runtime. It currently exposes the HTTP filter lists directly and preserves any existing AJAX, cron, and CLI filter arrays already present in saved config.
+
+The HTTP status code setting accepts comma-separated values or ranges such as `200-299, 500-599, 404`. The default is `200-299, 500-599`. Leave it empty if you want to drop all HTTP trace submissions.
 
 ## Feature flags
 
@@ -218,6 +227,7 @@ At a high level:
 2. It loads config and attempts to create the shared SDK client
 3. On `init`, it detects the current context and starts the appropriate lifecycle
 4. During the request, lightweight hooks add WordPress-specific attributes
+5. On shutdown, HTTP requests are only submitted if their status code is in `profile_http_status_codes`
 5. On `shutdown`, the lifecycle stops the span and submits the trace
 
 The plugin also adds context through WordPress hooks such as:
@@ -340,6 +350,25 @@ Full documentation is available at [perfbase.com/docs](https://perfbase.com/docs
 - **Issues**: [github.com/perfbaseorg/wordpress/issues](https://github.com/perfbaseorg/wordpress/issues)
 - **Support**: [support@perfbase.com](mailto:support@perfbase.com)
 
+## Release packaging
+
+Build the installable release ZIP from a clean checkout:
+
+```bash
+bin/build-release-zip
+```
+
+The generated ZIP is written to `dist/perfbase-1.0.0.zip` and includes production Composer dependencies only. Use this same ZIP for GitHub Releases and WordPress.org distribution.
+
+Release checklist:
+
+1. Run `composer test`, `composer phpstan`, and `composer phpcs`.
+2. Run `bin/build-release-zip`.
+3. Upload `dist/perfbase-<version>.zip` to the GitHub Release.
+4. Use the same generated package contents for WordPress.org SVN.
+
+`bin/build-wporg-zip` remains available as a compatibility wrapper around `bin/build-release-zip`.
+
 ## License
 
-Apache-2.0. See [LICENSE.txt](LICENSE.txt).
+GPL-2.0-or-later. See [LICENSE.txt](LICENSE.txt).

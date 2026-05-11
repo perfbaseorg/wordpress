@@ -8,8 +8,8 @@
  * Requires PHP: 7.4
  * Author: Perfbase Team
  * Author URI: https://perfbase.com
- * License: Apache-2.0
- * License URI: https://opensource.org/licenses/Apache-2.0
+ * License: GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: perfbase
  * Domain Path: /languages
  * Network: true
