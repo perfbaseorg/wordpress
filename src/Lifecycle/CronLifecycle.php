@@ -12,7 +12,7 @@ class CronLifecycle extends AbstractWordPressProfiler
 {
     public function __construct(PerfbasePlugin $plugin)
     {
-        parent::__construct('cron.execution', $plugin);
+        parent::__construct('cron', $plugin);
     }
 
     protected function shouldProfile(): bool

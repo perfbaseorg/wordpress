@@ -63,7 +63,7 @@ class FullRequestCycleTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -108,7 +108,7 @@ class FullRequestCycleTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.admin');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -146,7 +146,7 @@ class FullRequestCycleTest extends BaseWordPressTest
         $lifecycle->startProfiling();
 
         $this->assertInstanceOf(AjaxRequestLifecycle::class, $plugin->get_active_lifecycle());
-        $this->assertEquals('ajax.load_more_posts', $plugin->get_active_lifecycle()->getSpanName());
+        $this->assertEquals('ajax', $plugin->get_active_lifecycle()->getSpanName());
 
         $plugin->on_shutdown();
         $this->assertNull($plugin->get_active_lifecycle());
@@ -163,7 +163,7 @@ class FullRequestCycleTest extends BaseWordPressTest
         $lifecycle->startProfiling();
 
         $this->assertInstanceOf(CronLifecycle::class, $plugin->get_active_lifecycle());
-        $this->assertEquals('cron.execution', $plugin->get_active_lifecycle()->getSpanName());
+        $this->assertEquals('cron', $plugin->get_active_lifecycle()->getSpanName());
 
         $plugin->on_shutdown();
         $this->assertNull($plugin->get_active_lifecycle());
@@ -175,7 +175,7 @@ class FullRequestCycleTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -214,7 +214,7 @@ class FullRequestCycleTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')

@@ -14,23 +14,19 @@ class RequestContext
      */
     public function getSpanName(): string
     {
-        if ($this->isAdmin()) {
-            return 'wordpress.admin';
+        if ($this->isDoingCron()) {
+            return 'cron';
         }
 
         if ($this->isDoingAjax()) {
-            return 'wordpress.ajax';
-        }
-
-        if ($this->isDoingCron()) {
-            return 'wordpress.cron';
+            return 'ajax';
         }
 
         if ($this->isWpCli()) {
-            return 'wordpress.cli';
+            return 'cli';
         }
 
-        return 'wordpress.request';
+        return 'http';
     }
 
     /**

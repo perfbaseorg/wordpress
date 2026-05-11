@@ -60,7 +60,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -84,7 +84,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once();
 
         $mock_perfbase
@@ -93,7 +93,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once()
             ->andReturn(true);
 
@@ -120,7 +120,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
-            ->with('ajax.test_action')
+            ->with('ajax')
             ->once();
 
         $mock_perfbase
@@ -129,7 +129,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('ajax.test_action')
+            ->with('ajax')
             ->once()
             ->andReturn(true);
 
@@ -156,7 +156,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
-            ->with('cron.execution')
+            ->with('cron')
             ->once();
 
         $mock_perfbase
@@ -165,7 +165,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('cron.execution')
+            ->with('cron')
             ->once()
             ->andReturn(true);
 
@@ -192,7 +192,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -250,7 +250,7 @@ class PluginIntegrationTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         // on_init should not throw when perfbase is null
         $this->plugin->on_init();

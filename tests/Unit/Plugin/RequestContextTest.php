@@ -48,7 +48,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $span_name = $mock_context->getSpanName();
 
-        $this->assertEquals('wordpress.request', $span_name);
+        $this->assertEquals('http', $span_name);
     }
 
     public function testGetSpanNameForAdmin()
@@ -59,7 +59,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $span_name = $mock_context->getSpanName();
 
-        $this->assertEquals('wordpress.admin', $span_name);
+        $this->assertEquals('http', $span_name);
     }
 
     public function testGetSpanNameForAjax()
@@ -71,7 +71,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $span_name = $mock_context->getSpanName();
 
-        $this->assertEquals('wordpress.ajax', $span_name);
+        $this->assertEquals('ajax', $span_name);
     }
 
     public function testGetSpanNameForCron()
@@ -84,7 +84,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $span_name = $mock_context->getSpanName();
 
-        $this->assertEquals('wordpress.cron', $span_name);
+        $this->assertEquals('cron', $span_name);
     }
 
     public function testGetSpanNameForCli()
@@ -98,7 +98,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $span_name = $mock_context->getSpanName();
 
-        $this->assertEquals('wordpress.cli', $span_name);
+        $this->assertEquals('cli', $span_name);
     }
 
     public function testGetRequestAttributes()

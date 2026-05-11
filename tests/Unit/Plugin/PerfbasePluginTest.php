@@ -160,7 +160,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -177,7 +177,7 @@ class PerfbasePluginTest extends BaseWordPressTest
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
             ->once()
-            ->with('wordpress.request');
+            ->with('http');
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
@@ -200,7 +200,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -258,7 +258,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -299,7 +299,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -353,7 +353,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -382,7 +382,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once()
             ->andReturn(true);
 
@@ -409,7 +409,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -438,7 +438,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once()
             ->andReturn(true);
 
@@ -467,7 +467,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -496,7 +496,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once()
             ->andReturn(true);
 
@@ -522,7 +522,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $this->mock_request_context
             ->shouldReceive('getSpanName')
-            ->andReturn('wordpress.request');
+            ->andReturn('http');
 
         $this->mock_request_context
             ->shouldReceive('shouldProfileRequest')
@@ -551,7 +551,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('wordpress.request')
+            ->with('http')
             ->once()
             ->andReturn(true);
 
@@ -593,7 +593,7 @@ class PerfbasePluginTest extends BaseWordPressTest
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
             ->once()
-            ->with('ajax.test_action');
+            ->with('ajax');
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
@@ -625,7 +625,7 @@ class PerfbasePluginTest extends BaseWordPressTest
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
             ->once()
-            ->with('ajax.load_more_posts');
+            ->with('ajax');
 
         $mock_perfbase
             ->shouldReceive('setAttribute')
@@ -637,7 +637,7 @@ class PerfbasePluginTest extends BaseWordPressTest
         $lifecycle = new AjaxRequestLifecycle('  Load More Posts!?  ', $this->plugin);
         $lifecycle->startProfiling();
 
-        $this->assertSame('ajax.load_more_posts', $lifecycle->getSpanName());
+        $this->assertSame('ajax', $lifecycle->getSpanName());
     }
 
     public function testOnShutdownSkipsSubmittingForDisallowedAjaxHttpStatusByDefault()
@@ -658,7 +658,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $mock_perfbase
             ->shouldReceive('stopTraceSpan')
-            ->with('ajax.test_action')
+            ->with('ajax')
             ->once()
             ->andReturn(true);
 
@@ -696,7 +696,7 @@ class PerfbasePluginTest extends BaseWordPressTest
         $mock_perfbase
             ->shouldReceive('startTraceSpan')
             ->once()
-            ->with('cron.execution');
+            ->with('cron');
 
         $mock_perfbase
             ->shouldReceive('setAttribute')

@@ -21,7 +21,7 @@ class AjaxRequestLifecycle extends AbstractWordPressProfiler
     {
         $this->action = self::normalizeAction($action);
         $this->requestContext = $requestContext;
-        parent::__construct("ajax.{$this->action}", $plugin);
+        parent::__construct('ajax', $plugin);
     }
 
     protected function shouldProfile(): bool

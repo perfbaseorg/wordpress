@@ -151,7 +151,7 @@ class FilterMatcherTest extends BaseWordPressTest
     public function testPassesFiltersCronContext()
     {
         $this->assertTrue(FilterMatcher::passesFilters(
-            ['cron.execution'],
+            ['cron'],
             ['cron' => ['*']],
             ['cron' => []],
             'cron'
