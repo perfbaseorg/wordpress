@@ -3,9 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGIN_SLUG="perfbase"
-VERSION="$(php -r '$contents = file_get_contents($argv[1]); if (preg_match("/Version:\\s*([0-9.]+)/", $contents, $m)) { echo $m[1]; exit(0); } exit(1);' "$ROOT_DIR/perfbase.php")"
 DIST_DIR="$ROOT_DIR/dist"
-ZIP_PATH="$DIST_DIR/${PLUGIN_SLUG}-${VERSION}.zip"
 TMP_DIR="$(mktemp -d)"
 STAGE_DIR="$TMP_DIR/$PLUGIN_SLUG"
 
@@ -26,6 +24,70 @@ require_command php
 require_command rsync
 require_command zip
 
+normalize_version() {
+    local input="${1:-}"
+
+    if [[ -z "$input" ]]; then
+        if [[ "${GITHUB_REF_TYPE:-}" == "tag" && -n "${GITHUB_REF_NAME:-}" ]]; then
+            input="$GITHUB_REF_NAME"
+        else
+            input="$(php -r '$contents = file_get_contents($argv[1]); if (preg_match("/Version:\s*([^\r\n]+)/", $contents, $m)) { echo trim($m[1]); exit(0); } exit(1);' "$ROOT_DIR/perfbase.php")"
+        fi
+    fi
+
+    input="${input#refs/tags/}"
+    input="${input#v}"
+
+    if [[ ! "$input" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+        echo "Invalid release version: ${1:-$input}" >&2
+        echo "Expected a version like 1.2.3 or a tag like v1.2.3." >&2
+        exit 1
+    fi
+
+    printf '%s' "$input"
+}
+
+apply_release_version() {
+    local version="$1"
+    local plugin_file="$STAGE_DIR/perfbase.php"
+    local readme_file="$STAGE_DIR/readme.txt"
+
+    php -r '
+        [$version, $pluginFile, $readmeFile] = array_slice($argv, 1);
+
+        $replaceOne = static function (string $pattern, string $replacement, string $contents, string $label): string {
+            $updated = preg_replace($pattern, $replacement, $contents, 1, $count);
+            if ($updated === null || $count !== 1) {
+                fwrite(STDERR, "Unable to replace {$label}\n");
+                exit(1);
+            }
+            return $updated;
+        };
+
+        $plugin = file_get_contents($pluginFile);
+        if ($plugin === false) {
+            fwrite(STDERR, "Unable to read {$pluginFile}\n");
+            exit(1);
+        }
+        $plugin = $replaceOne("/^ \* Version:\s*.+$/m", " * Version: {$version}", $plugin, "plugin header version");
+        $plugin = $replaceOne("/^define\('\''PERFBASE_PLUGIN_VERSION'\'',\s*'\''[^'\'']+'\''\);$/m", "define('\''PERFBASE_PLUGIN_VERSION'\'', '\''{$version}'\'');", $plugin, "plugin constant version");
+        file_put_contents($pluginFile, $plugin);
+
+        $readme = file_get_contents($readmeFile);
+        if ($readme === false) {
+            fwrite(STDERR, "Unable to read {$readmeFile}\n");
+            exit(1);
+        }
+        $readme = $replaceOne("/^Stable tag:\s*.+$/m", "Stable tag: {$version}", $readme, "readme stable tag");
+        $readme = $replaceOne("/^= Unreleased =$/m", "= {$version} =", $readme, "readme changelog heading");
+        $readme = $replaceOne("/^= Unreleased =$/m", "= {$version} =", $readme, "readme upgrade heading");
+        file_put_contents($readmeFile, $readme);
+    ' "$version" "$plugin_file" "$readme_file"
+}
+
+VERSION="$(normalize_version "${1:-}")"
+ZIP_PATH="$DIST_DIR/${PLUGIN_SLUG}-${VERSION}.zip"
+
 mkdir -p "$STAGE_DIR" "$DIST_DIR"
 
 rsync -a \
@@ -39,9 +101,11 @@ rsync -a \
     "$ROOT_DIR/assets" \
     "$STAGE_DIR/"
 
+apply_release_version "$VERSION"
+
 (
     cd "$STAGE_DIR"
-    COMPOSER_ROOT_VERSION="$VERSION" composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+    COMPOSER_ROOT_VERSION="$VERSION" composer install --no-dev --optimize-autoloader --no-interaction --no-progress >&2
     rm -f composer.json composer.lock
     rm -rf vendor/bin
     find vendor -type d \( -name .git -o -name .github -o -name tests -o -name test -o -name Test -o -name examples \) -prune -exec rm -rf {} +

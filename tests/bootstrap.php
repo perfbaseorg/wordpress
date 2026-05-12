@@ -33,7 +33,7 @@ if (!defined('WPINC')) {
 define('PERFBASE_PLUGIN_FILE', dirname(__DIR__) . '/perfbase.php');
 define('PERFBASE_PLUGIN_DIR', dirname(__DIR__) . '/');
 define('PERFBASE_PLUGIN_URL', 'http://example.com/wp-content/plugins/perfbase/');
-define('PERFBASE_PLUGIN_VERSION', '1.0.0');
+define('PERFBASE_PLUGIN_VERSION', '0.0.0-dev');
 define('PERFBASE_MIN_PHP_VERSION', '7.4');
 define('PERFBASE_MIN_WP_VERSION', '5.0');
 

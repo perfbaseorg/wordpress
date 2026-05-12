@@ -3,7 +3,7 @@
  * Plugin Name: Perfbase
  * Plugin URI: https://perfbase.com
  * Description: WordPress integration for the Perfbase APM platform. Provides comprehensive performance monitoring and profiling for WordPress applications.
- * Version: 1.0.0
+ * Version: 0.0.0-dev
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: Perfbase Team
@@ -26,7 +26,7 @@ if (!defined('ABSPATH')) {
 define('PERFBASE_PLUGIN_FILE', __FILE__);
 define('PERFBASE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PERFBASE_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('PERFBASE_PLUGIN_VERSION', '1.0.0');
+define('PERFBASE_PLUGIN_VERSION', '0.0.0-dev');
 define('PERFBASE_MIN_PHP_VERSION', '7.4');
 define('PERFBASE_MIN_WP_VERSION', '5.0');
 

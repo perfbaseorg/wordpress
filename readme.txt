@@ -4,7 +4,7 @@ Tags: performance, profiling, apm, monitoring, woocommerce
 Requires at least: 5.0
 Tested up to: 6.9.4
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: trunk
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -78,15 +78,13 @@ Administrators should review their site's privacy policy and disclose their use 
 
 == Changelog ==
 
-= 1.0.0 =
+= Unreleased =
 
-* Initial WordPress.org release.
-* Adds WordPress request profiling through the Perfbase PHP SDK and native extension.
-* Adds admin settings for API key, sampling, feature flags, request contexts, and filters.
-* Adds WordPress, REST, AJAX, cron, WP-CLI, and WooCommerce-aware context collection.
+* Tagged Perfbase WordPress plugin release.
+* Built with production Composer dependencies and tag-synced plugin metadata.
 
 == Upgrade Notice ==
 
-= 1.0.0 =
+= Unreleased =
 
-Initial WordPress.org release.
+Tagged Perfbase WordPress plugin release.

@@ -352,20 +352,27 @@ Full documentation is available at [perfbase.com/docs](https://perfbase.com/docs
 
 ## Release packaging
 
-Build the installable release ZIP from a clean checkout:
+Build the installable release ZIP from a clean checkout by passing the tag or release version:
 
 ```bash
-bin/build-release-zip
+bin/build-release-zip v1.2.3
 ```
 
-The generated ZIP is written to `dist/perfbase-1.0.0.zip` and includes production Composer dependencies only. Use this same ZIP for GitHub Releases and WordPress.org distribution.
+The generated ZIP is written to `dist/perfbase-<version>.zip` and includes production Composer dependencies only. Use this same ZIP for GitHub Releases and WordPress.org distribution.
 
 Release checklist:
 
 1. Run `composer test`, `composer phpstan`, and `composer phpcs`.
-2. Run `bin/build-release-zip`.
-3. Upload `dist/perfbase-<version>.zip` to the GitHub Release.
+2. Tag the release as `v<version>`, for example `v1.2.3`.
+3. Push the tag. GitHub Actions builds, verifies, and uploads the installable ZIP to the GitHub Release.
 4. Use the same generated package contents for WordPress.org SVN.
+
+To reproduce the tagged package locally:
+
+```bash
+bin/build-release-zip v1.2.3
+bin/verify-release-zip dist/perfbase-1.2.3.zip v1.2.3
+```
 
 `bin/build-wporg-zip` remains available as a compatibility wrapper around `bin/build-release-zip`.
 

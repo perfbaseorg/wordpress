@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  wordpress-plugin-zip:
+    name: Build WordPress plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json, zip
+          tools: composer:v2
+
+      - name: Install OS packaging tools
+        run: sudo apt-get update && sudo apt-get install -y rsync unzip zip
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install Perfbase
+        run: bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHPUnit tests
+        run: composer test
+
+      - name: Run PHPStan
+        run: composer phpstan
+
+      - name: Run PHPCS
+        run: composer phpcs
+
+      - name: Build release ZIP
+        id: package
+        run: |
+          zip_path="$(bin/build-release-zip "$GITHUB_REF_NAME")"
+          echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release ZIP
+        run: bin/verify-release-zip "${{ steps.package.outputs.zip_path }}" "$GITHUB_REF_NAME"
+
+      - name: Upload GitHub Release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          files: ${{ steps.package.outputs.zip_path }}

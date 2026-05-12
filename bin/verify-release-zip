@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLUGIN_SLUG="perfbase"
+ZIP_PATH="${1:-}"
+EXPECTED_VERSION_INPUT="${2:-}"
+TMP_DIR="$(mktemp -d)"
+
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+require_command() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "Required command not found: $1" >&2
+        exit 1
+    fi
+}
+
+normalize_version() {
+    local input="$1"
+
+    input="${input#refs/tags/}"
+    input="${input#v}"
+
+    if [[ ! "$input" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+        echo "Invalid release version: $1" >&2
+        echo "Expected a version like 1.2.3 or a tag like v1.2.3." >&2
+        exit 1
+    fi
+
+    printf '%s' "$input"
+}
+
+if [[ -z "$ZIP_PATH" || -z "$EXPECTED_VERSION_INPUT" ]]; then
+    echo "Usage: bin/verify-release-zip <zip-path> <version-or-tag>" >&2
+    exit 1
+fi
+
+require_command php
+require_command unzip
+
+EXPECTED_VERSION="$(normalize_version "$EXPECTED_VERSION_INPUT")"
+EXPECTED_BASENAME="${PLUGIN_SLUG}-${EXPECTED_VERSION}.zip"
+
+if [[ ! -f "$ZIP_PATH" ]]; then
+    echo "Release ZIP not found: $ZIP_PATH" >&2
+    exit 1
+fi
+
+if [[ "$(basename "$ZIP_PATH")" != "$EXPECTED_BASENAME" ]]; then
+    echo "Expected ZIP basename $EXPECTED_BASENAME, got $(basename "$ZIP_PATH")" >&2
+    exit 1
+fi
+
+unzip -q "$ZIP_PATH" -d "$TMP_DIR"
+
+PLUGIN_DIR="$TMP_DIR/$PLUGIN_SLUG"
+PLUGIN_FILE="$PLUGIN_DIR/perfbase.php"
+README_FILE="$PLUGIN_DIR/readme.txt"
+
+for required_path in "$PLUGIN_FILE" "$README_FILE" "$PLUGIN_DIR/vendor/autoload.php" "$PLUGIN_DIR/LICENSE.txt"; do
+    if [[ ! -f "$required_path" ]]; then
+        echo "Expected packaged file missing: ${required_path#$TMP_DIR/}" >&2
+        exit 1
+    fi
+done
+
+for forbidden_path in composer.json composer.lock tests .github AGENTS.md CLAUDE.md phpunit.xml phpstan.neon; do
+    if [[ -e "$PLUGIN_DIR/$forbidden_path" ]]; then
+        echo "Development file should not be packaged: $forbidden_path" >&2
+        exit 1
+    fi
+done
+
+php -r '
+    [$version, $pluginFile, $readmeFile] = array_slice($argv, 1);
+
+    $plugin = file_get_contents($pluginFile);
+    $readme = file_get_contents($readmeFile);
+
+    if ($plugin === false || $readme === false) {
+        fwrite(STDERR, "Unable to read packaged metadata\n");
+        exit(1);
+    }
+
+    $expect = static function (bool $condition, string $message): void {
+        if (!$condition) {
+            fwrite(STDERR, $message . "\n");
+            exit(1);
+        }
+    };
+
+    $expect((bool) preg_match("/^ \* Version:\s*" . preg_quote($version, "/") . "$/m", $plugin), "Plugin header version does not match {$version}");
+    $expect((bool) preg_match("/^define\('\''PERFBASE_PLUGIN_VERSION'\'',\s*'\''" . preg_quote($version, "/") . "'\''\);$/m", $plugin), "Plugin constant version does not match {$version}");
+    $expect((bool) preg_match("/^Stable tag:\s*" . preg_quote($version, "/") . "$/m", $readme), "Readme stable tag does not match {$version}");
+    $expect((bool) preg_match("/^= " . preg_quote($version, "/") . " =$/m", $readme), "Readme changelog or upgrade notice does not include {$version}");
+' "$EXPECTED_VERSION" "$PLUGIN_FILE" "$README_FILE"
+
+echo "Verified $ZIP_PATH"

@@ -120,7 +120,7 @@ class RequestContextTest extends BaseWordPressTest
         $this->assertEquals('http://example.com/test-page/', $attributes['http_url']);
         $this->assertEquals('Mozilla/5.0 Test Browser', $attributes['user_agent']);
         $this->assertEquals('6.0', $attributes['wordpress.version']);
-        $this->assertEquals('1.0.0', $attributes['perfbase.version']);
+        $this->assertEquals(PERFBASE_PLUGIN_VERSION, $attributes['perfbase.version']);
     }
 
     public function testGetRequestAttributesWithPostId()
