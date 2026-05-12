@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Helpers;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Handles WordPress request context detection and attribute collection
  */
@@ -158,7 +162,7 @@ class RequestContext
      */
     private function addImportantQueryParams(array &$attributes, string $requestUri): void
     {
-        $queryString = parse_url($requestUri, PHP_URL_QUERY);
+        $queryString = wp_parse_url($requestUri, PHP_URL_QUERY);
         if (!$queryString) {
             return;
         }
@@ -464,7 +468,7 @@ class RequestContext
 
     private function extractRequestPath(string $requestUri): string
     {
-        $path = parse_url($requestUri, PHP_URL_PATH);
+        $path = wp_parse_url($requestUri, PHP_URL_PATH);
         if (!is_string($path) || $path === '') {
             $path = '/';
         }
@@ -501,7 +505,7 @@ class RequestContext
         if (function_exists('sanitize_text_field')) {
             $value = sanitize_text_field($value);
         } else {
-            $value = strip_tags($value);
+            $value = wp_strip_all_tags($value);
             $value = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
             $value = is_string($value) ? trim($value) : '';
         }

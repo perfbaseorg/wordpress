@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Support;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Shared filter matching for include/exclude pattern lists.
  *

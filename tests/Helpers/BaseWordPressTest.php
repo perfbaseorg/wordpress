@@ -55,6 +55,19 @@ abstract class BaseWordPressTest extends TestCase
         Functions\when('esc_textarea')->returnArg();
         Functions\when('sanitize_text_field')->returnArg();
         Functions\when('wp_unslash')->returnArg();
+        Functions\when('wp_strip_all_tags')->alias(function($value) {
+            return strip_tags((string) $value);
+        });
+        Functions\when('wp_parse_url')->alias(function($url, $component = -1) {
+            return parse_url($url, $component);
+        });
+        Functions\when('wp_rand')->alias(function($min = null, $max = null) {
+            if ($min === null && $max === null) {
+                return mt_rand();
+            }
+
+            return mt_rand((int) $min, (int) $max);
+        });
         Functions\when('sanitize_key')->alias(function($value) {
             $value = strtolower((string) $value);
             $value = preg_replace('/[^a-z0-9_\-]/', '_', $value);

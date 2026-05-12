@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Lifecycle;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Perfbase\WordPress\Helpers\RequestContext;
 use Perfbase\WordPress\PerfbasePlugin;
 

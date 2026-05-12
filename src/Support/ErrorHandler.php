@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Support;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Error handling trait for Perfbase WordPress components.
  *
@@ -28,6 +32,7 @@ trait ErrorHandler
         }
 
         if ($config['log_errors'] ?? true) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Optional site-owner diagnostics controlled by the log_errors setting.
             error_log(sprintf(
                 'Perfbase profiling error in %s: %s',
                 $context ?: 'unknown',

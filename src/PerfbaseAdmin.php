@@ -7,6 +7,10 @@
 
 namespace Perfbase\WordPress;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Perfbase\SDK\FeatureFlags;
 use Perfbase\WordPress\Helpers\ConfigManager;
 
@@ -59,6 +63,7 @@ class PerfbaseAdmin {
         $api_url = !empty($config['api_url']) ? (string) $config['api_url'] : 'https://ingress.perfbase.cloud';
 
         $content = sprintf(
+            /* translators: %s: configured Perfbase API endpoint URL. */
             __(
                 'Perfbase is an external application performance monitoring service. When a Perfbase API key is configured and profiling is enabled, this site may send profiling traces to the configured Perfbase API endpoint, currently %s. Submitted traces may include performance timing data, call and error context, database/cache/HTTP/file-operation metadata depending on enabled feature flags, the URL path without the query string, user IP address, user agent, user ID when a visitor is logged in, hostname, environment, application version, PHP version, HTTP method, HTTP status code, and WordPress request context metadata. Perfbase does not submit profiling traces when the API key is missing or profiling is disabled.',
                 'perfbase'
@@ -752,6 +757,7 @@ class PerfbaseAdmin {
             $input['include_http'] ?? null,
             ['*']
         );
+        // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- This is a plugin config key, not a WP_Query argument.
         $sanitized['exclude'] = $this->sanitizeContextFilters(
             is_array($existing['exclude'] ?? null) ? $existing['exclude'] : [],
             'http',

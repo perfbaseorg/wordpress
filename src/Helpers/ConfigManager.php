@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Helpers;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Perfbase\SDK\FeatureFlags;
 
 /**
@@ -194,6 +198,7 @@ class ConfigManager
         }
 
         $config['include'] = $include;
+        // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- This is a plugin config key, not a WP_Query argument.
         $config['exclude'] = $exclude;
 
         return $config;
@@ -238,6 +243,7 @@ class ConfigManager
                 'cron' => ['*'],
                 'cli' => ['*'],
             ],
+            // phpcs:ignore WordPressVIPMinimum.Performance.WPQueryParams.PostNotIn_exclude -- This is a plugin config key, not a WP_Query argument.
             'exclude' => [
                 'http' => [
                     '/wp-content/uploads/*',

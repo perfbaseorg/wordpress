@@ -2,6 +2,10 @@
 
 namespace Perfbase\WordPress\Lifecycle;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Perfbase\SDK\Exception\PerfbaseException;
 use Perfbase\SDK\Perfbase;
 use Perfbase\WordPress\Helpers\ConfigManager;
@@ -193,7 +197,7 @@ abstract class AbstractWordPressProfiler
             return false;
         }
 
-        return (mt_rand() / mt_getrandmax()) <= (float) $sampleRate;
+        return (wp_rand() / mt_getrandmax()) <= (float) $sampleRate;
     }
 
     /**

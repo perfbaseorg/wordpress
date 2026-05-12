@@ -7,6 +7,10 @@
 
 namespace Perfbase\WordPress;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Handles WordPress-specific profiling scenarios
  */

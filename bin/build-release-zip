@@ -106,7 +106,7 @@ apply_release_version "$VERSION"
 (
     cd "$STAGE_DIR"
     COMPOSER_ROOT_VERSION="$VERSION" composer install --no-dev --optimize-autoloader --no-interaction --no-progress >&2
-    rm -f composer.json composer.lock
+    rm -f composer.lock
     rm -rf vendor/bin
     find vendor -type d \( -name .git -o -name .github -o -name tests -o -name test -o -name Test -o -name examples \) -prune -exec rm -rf {} +
     find vendor -type f \( -name phpunit.xml -o -name phpstan.neon -o -name .gitignore -o -name .dockerignore -o -name Dockerfile -o -name 'docker-compose*.yml' -o -name 'test*.sh' -o -name package-lock.json \) -delete

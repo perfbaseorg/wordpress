@@ -7,6 +7,10 @@
 
 namespace Perfbase\WordPress;
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Perfbase\SDK\Config;
 use Perfbase\SDK\FeatureFlags;
 use Perfbase\SDK\Perfbase;
@@ -105,7 +109,6 @@ class PerfbasePlugin {
     {
         $this->load_config();
         $this->init_admin();
-        $this->load_textdomain();
 
         if (!$this->is_enabled()) {
             return;
@@ -355,7 +358,7 @@ class PerfbasePlugin {
      */
     private function sanitizeExternalUrl(string $url): ?string
     {
-        $parts = parse_url($url);
+        $parts = wp_parse_url($url);
         if (!is_array($parts) || empty($parts['host'])) {
             return null;
         }
@@ -375,24 +378,6 @@ class PerfbasePlugin {
         }
 
         return $sanitized;
-    }
-
-    // ------------------------------------------------------------------
-    // Textdomain
-    // ------------------------------------------------------------------
-
-    /**
-     * Load plugin text domain
-     *
-     * @return void
-     */
-    private function load_textdomain(): void
-    {
-        load_plugin_textdomain(
-            'perfbase',
-            false,
-            dirname(plugin_basename(PERFBASE_PLUGIN_FILE)) . '/languages'
-        );
     }
 
     // ------------------------------------------------------------------
