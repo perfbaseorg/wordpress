@@ -69,6 +69,29 @@ class FilterMatcherTest extends BaseWordPressTest
         ));
     }
 
+    public function testRejectsOverlongRegex()
+    {
+        // 501-char pattern between the leading and trailing slash.
+        $overlong = '/' . str_repeat('a', 510) . '/';
+        $this->assertFalse(FilterMatcher::matches(['aaaaa'], [$overlong]));
+    }
+
+    public function testRejectsCatastrophicBacktrackingRegex()
+    {
+        // Classic ReDoS shape — must be rejected before reaching preg_match.
+        $start = microtime(true);
+        $result = FilterMatcher::matches(
+            [str_repeat('a', 30) . '!'],
+            ['/(a+)+$/']
+        );
+        $elapsed = microtime(true) - $start;
+
+        $this->assertFalse($result);
+        // The heuristic should make this near-instant; a real ReDoS would
+        // take seconds. Generous bound to avoid flakiness on slow CI.
+        $this->assertLessThan(0.5, $elapsed);
+    }
+
     public function testMatchesMultipleComponents()
     {
         // Second component matches

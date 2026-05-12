@@ -17,6 +17,7 @@ class RequestContext
     private const MAX_USER_AGENT_LENGTH = 512;
     private const MAX_QUERY_VALUE_LENGTH = 512;
     private const MAX_QUERY_KEY_LENGTH = 128;
+    private const MAX_APP_VERSION_LENGTH = 64;
 
     /**
      * Get span name for the current request
@@ -219,11 +220,11 @@ class RequestContext
     {
         // Check for custom constant
         if (defined('PERFBASE_APP_VERSION')) {
-            return PERFBASE_APP_VERSION;
+            return $this->sanitizeAttributeValue(PERFBASE_APP_VERSION, self::MAX_APP_VERSION_LENGTH);
         }
 
         // Fall back to WordPress version
-        return get_bloginfo('version');
+        return $this->sanitizeAttributeValue((string) get_bloginfo('version'), self::MAX_APP_VERSION_LENGTH);
     }
 
     /**

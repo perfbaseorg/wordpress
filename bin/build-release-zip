@@ -92,6 +92,7 @@ mkdir -p "$STAGE_DIR" "$DIST_DIR"
 
 rsync -a \
     "$ROOT_DIR/perfbase.php" \
+    "$ROOT_DIR/uninstall.php" \
     "$ROOT_DIR/README.md" \
     "$ROOT_DIR/readme.txt" \
     "$ROOT_DIR/LICENSE.txt" \

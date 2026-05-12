@@ -579,7 +579,7 @@ class PerfbasePluginTest extends BaseWordPressTest
 
     public function testOnInitCreatesAjaxRequestLifecycleWhenDoingAjax()
     {
-        $_REQUEST['action'] = 'test_action';
+        $_POST['action'] = 'test_action';
 
         $config = TestData::getValidConfig();
         $config['sample_rate'] = 1.0;
@@ -609,6 +609,39 @@ class PerfbasePluginTest extends BaseWordPressTest
         $lifecycle->startProfiling();
 
         $this->assertInstanceOf(AjaxRequestLifecycle::class, $this->plugin->get_active_lifecycle());
+    }
+
+    public function testGetAjaxActionNamePrefersPostOverGet()
+    {
+        $_POST['action'] = 'post_action';
+        $_GET['action'] = 'get_action';
+
+        try {
+            $name = $this->invokePrivateMethod($this->plugin, 'getAjaxActionName');
+            $this->assertSame('post_action', $name);
+        } finally {
+            unset($_POST['action'], $_GET['action']);
+        }
+    }
+
+    public function testGetAjaxActionNameFallsBackToGet()
+    {
+        unset($_POST['action']);
+        $_GET['action'] = 'get_action';
+
+        try {
+            $name = $this->invokePrivateMethod($this->plugin, 'getAjaxActionName');
+            $this->assertSame('get_action', $name);
+        } finally {
+            unset($_GET['action']);
+        }
+    }
+
+    public function testGetAjaxActionNameReturnsUnknownWhenMissing()
+    {
+        unset($_POST['action'], $_GET['action']);
+        $name = $this->invokePrivateMethod($this->plugin, 'getAjaxActionName');
+        $this->assertSame('unknown', $name);
     }
 
     public function testAjaxLifecycleNormalizesActionName()

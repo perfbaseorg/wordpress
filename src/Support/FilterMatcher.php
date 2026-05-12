@@ -14,6 +14,12 @@ if (!defined('ABSPATH')) {
 class FilterMatcher
 {
     /**
+     * Maximum length of a user-supplied regex pattern. Patterns longer than
+     * this are rejected to bound worst-case PCRE work.
+     */
+    private const MAX_REGEX_LENGTH = 500;
+
+    /**
      * Check if any component matches any filter pattern.
      *
      * @param array<string> $components Values to test
@@ -29,7 +35,7 @@ class FilterMatcher
 
             // Regex patterns enclosed in forward slashes
             if (preg_match('/^\/.*\/$/', $filter)) {
-                if (!self::isValidRegex($filter)) {
+                if (!self::isSafeRegex($filter)) {
                     continue;
                 }
 
@@ -61,6 +67,32 @@ class FilterMatcher
     private static function isValidRegex(string $filter): bool
     {
         return @preg_match($filter, '') !== false;
+    }
+
+    /**
+     * Reject regex patterns that are too long, contain obvious
+     * catastrophic-backtracking shapes, or fail to compile.
+     *
+     * Admin-supplied regex runs on every profiled request, so we cheaply
+     * exclude common ReDoS forms (nested quantifiers like `(a+)+` or `(.*)*`)
+     * before handing the pattern to PCRE.
+     *
+     * @param string $filter
+     * @return bool
+     */
+    private static function isSafeRegex(string $filter): bool
+    {
+        if (strlen($filter) > self::MAX_REGEX_LENGTH) {
+            return false;
+        }
+
+        // Heuristic: a quantified group whose body contains another
+        // quantifier is the classic catastrophic-backtracking shape.
+        if (preg_match('/\([^)]*[+*][^)]*\)\s*[+*]/', $filter) === 1) {
+            return false;
+        }
+
+        return self::isValidRegex($filter);
     }
 
     /**

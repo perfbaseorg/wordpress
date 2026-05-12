@@ -30,7 +30,7 @@ This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/pa
 
 ## Requirements
 
-- PHP `7.4` to `8.5`
+- PHP `>=7.4 <8.5`
 - WordPress `5.0+`
 - `ext-curl`
 - `ext-json`
@@ -86,6 +86,9 @@ define('PERFBASE_API_URL', 'https://ingress.perfbase.cloud');
 define('PERFBASE_TIMEOUT', 10);
 define('PERFBASE_PROXY', '');
 define('PERFBASE_FLAGS', \Perfbase\SDK\FeatureFlags::DefaultFlags);
+define('PERFBASE_PROFILE_HTTP_STATUS_CODES', '200-299,500-599');
+define('PERFBASE_DEBUG', false);
+define('PERFBASE_LOG_ERRORS', true);
 
 // Trace metadata helpers
 define('PERFBASE_ENVIRONMENT', 'production');
@@ -228,7 +231,7 @@ At a high level:
 3. On `init`, it detects the current context and starts the appropriate lifecycle
 4. During the request, lightweight hooks add WordPress-specific attributes
 5. On shutdown, HTTP requests are only submitted if their status code is in `profile_http_status_codes`
-5. On `shutdown`, the lifecycle stops the span and submits the trace
+6. On `shutdown`, the lifecycle stops the span and submits the trace
 
 The plugin also adds context through WordPress hooks such as:
 

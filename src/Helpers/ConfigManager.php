@@ -49,6 +49,60 @@ class ConfigManager
             $defaults['profile_http_status_codes']
         );
 
+        // Normalise scalar values regardless of source (options, constants,
+        // legacy data) so out-of-range values can never reach the SDK.
+        return self::normalizeConfigValues($config);
+    }
+
+    /**
+     * Normalise config scalar values into a safe canonical shape.
+     *
+     * Applied after both the WordPress options and wp-config.php constants
+     * are merged, so values from any source are clamped/cast identically.
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    public static function normalizeConfigValues(array $config): array
+    {
+        $config['enabled']    = !empty($config['enabled']);
+        $config['debug']      = !empty($config['debug']);
+        $config['log_errors'] = !empty($config['log_errors']);
+
+        foreach (['profile_admin', 'profile_ajax', 'profile_cron', 'profile_cli'] as $key) {
+            if (array_key_exists($key, $config)) {
+                $config[$key] = !empty($config[$key]);
+            }
+        }
+
+        $sampleRate = isset($config['sample_rate']) && is_numeric($config['sample_rate'])
+            ? (float) $config['sample_rate']
+            : 0.1;
+        $config['sample_rate'] = max(0.0, min(1.0, $sampleRate));
+
+        $timeout = isset($config['timeout']) && is_numeric($config['timeout'])
+            ? (int) $config['timeout']
+            : 10;
+        $config['timeout'] = max(1, min(60, $timeout));
+
+        $flags = isset($config['flags']) && is_numeric($config['flags'])
+            ? (int) $config['flags']
+            : FeatureFlags::DefaultFlags;
+        $config['flags'] = $flags & FeatureFlags::ValidFlagsMask;
+
+        $apiUrl = isset($config['api_url']) && is_string($config['api_url'])
+            ? esc_url_raw($config['api_url'])
+            : '';
+        $config['api_url'] = $apiUrl !== '' ? $apiUrl : 'https://ingress.perfbase.cloud';
+
+        $config['api_key'] = isset($config['api_key']) && is_scalar($config['api_key'])
+            ? sanitize_text_field((string) $config['api_key'])
+            : '';
+
+        $config['proxy'] = isset($config['proxy']) && is_scalar($config['proxy'])
+            ? sanitize_text_field((string) $config['proxy'])
+            : '';
+
         return $config;
     }
 

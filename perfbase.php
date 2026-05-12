@@ -11,7 +11,6 @@
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: perfbase
- * Network: true
  *
  * @package Perfbase\WordPress
  */
@@ -121,22 +120,6 @@ function perfbase_activate() {
 }
 register_activation_hook(__FILE__, 'perfbase_activate');
 
-/**
- * Plugin deactivation hook
- */
-function perfbase_deactivate() {
-    // No-op: plugin does not manage rewrite rules.
-}
-register_deactivation_hook(__FILE__, 'perfbase_deactivate');
-
-/**
- * Plugin uninstall hook
- */
-function perfbase_uninstall() {
-    // Remove plugin options
-    delete_option('perfbase_settings');
-
-    // Clean up any cached data
-    wp_cache_delete('perfbase_config');
-}
-register_uninstall_hook(__FILE__, 'perfbase_uninstall');
+// Uninstall handling lives in uninstall.php (loaded by WordPress when the
+// plugin is deleted). Using uninstall.php instead of register_uninstall_hook
+// keeps the callback discoverable and lets us be multisite-aware.

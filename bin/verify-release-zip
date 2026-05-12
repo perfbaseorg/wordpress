@@ -61,14 +61,14 @@ PLUGIN_DIR="$TMP_DIR/$PLUGIN_SLUG"
 PLUGIN_FILE="$PLUGIN_DIR/perfbase.php"
 README_FILE="$PLUGIN_DIR/readme.txt"
 
-for required_path in "$PLUGIN_FILE" "$README_FILE" "$PLUGIN_DIR/vendor/autoload.php" "$PLUGIN_DIR/LICENSE.txt"; do
+for required_path in "$PLUGIN_FILE" "$README_FILE" "$PLUGIN_DIR/uninstall.php" "$PLUGIN_DIR/composer.json" "$PLUGIN_DIR/vendor/autoload.php" "$PLUGIN_DIR/LICENSE.txt"; do
     if [[ ! -f "$required_path" ]]; then
         echo "Expected packaged file missing: ${required_path#$TMP_DIR/}" >&2
         exit 1
     fi
 done
 
-for forbidden_path in composer.json composer.lock tests .github AGENTS.md CLAUDE.md phpunit.xml phpstan.neon; do
+for forbidden_path in composer.lock tests .github AGENTS.md CLAUDE.md phpunit.xml phpstan.neon; do
     if [[ -e "$PLUGIN_DIR/$forbidden_path" ]]; then
         echo "Development file should not be packaged: $forbidden_path" >&2
         exit 1

@@ -197,7 +197,7 @@ abstract class AbstractWordPressProfiler
             return false;
         }
 
-        return (wp_rand() / mt_getrandmax()) <= (float) $sampleRate;
+        return (wp_rand(0, 1000000) / 1000000) <= (float) $sampleRate;
     }
 
     /**

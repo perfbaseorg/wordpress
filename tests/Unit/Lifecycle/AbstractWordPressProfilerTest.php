@@ -248,6 +248,45 @@ class AbstractWordPressProfilerTest extends BaseWordPressTest
         $this->addToAssertionCount(1);
     }
 
+    public function testPassesSampleRateCheckAtIntermediateRate(): void
+    {
+        // wp_rand(0, 1000000) returns 500000 → ratio = 0.5
+        \Brain\Monkey\Functions\when('wp_rand')->alias(function ($min = 0, $max = 0) {
+            return 500000;
+        });
+
+        $plugin = Mockery::mock(PerfbasePlugin::class);
+        $plugin->shouldReceive('get_perfbase')->andReturn($this->mockPerfbase);
+        $plugin->shouldReceive('get_config')->andReturn(
+            array_merge(TestData::getValidConfig(), ['sample_rate' => 0.6])
+        );
+
+        $this->mockPerfbase->shouldReceive('startTraceSpan')->once();
+
+        $profiler = new ConcreteTestProfiler('test.span', $plugin);
+        $profiler->startProfiling();
+        $this->addToAssertionCount(1);
+    }
+
+    public function testPassesSampleRateCheckFailsBelowRate(): void
+    {
+        \Brain\Monkey\Functions\when('wp_rand')->alias(function ($min = 0, $max = 0) {
+            return 500000;
+        });
+
+        $plugin = Mockery::mock(PerfbasePlugin::class);
+        $plugin->shouldReceive('get_perfbase')->andReturn($this->mockPerfbase);
+        $plugin->shouldReceive('get_config')->andReturn(
+            array_merge(TestData::getValidConfig(), ['sample_rate' => 0.4])
+        );
+
+        $this->mockPerfbase->shouldNotReceive('startTraceSpan');
+
+        $profiler = new ConcreteTestProfiler('test.span', $plugin);
+        $profiler->startProfiling();
+        $this->addToAssertionCount(1);
+    }
+
     public function testDefaultAttributesSetHostnameAndPhpVersion(): void
     {
         $this->mockPerfbase->shouldReceive('startTraceSpan')->once();

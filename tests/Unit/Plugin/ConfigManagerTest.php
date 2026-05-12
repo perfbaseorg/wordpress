@@ -351,6 +351,77 @@ class ConfigManagerTest extends BaseWordPressTest
         $this->assertArrayNotHasKey('excluded_user_agents', $defaults);
     }
 
+    public function testNormalizeConfigValuesClampsSampleRate()
+    {
+        $negative = ConfigManager::normalizeConfigValues(['sample_rate' => -0.5]);
+        $this->assertSame(0.0, $negative['sample_rate']);
+
+        $tooHigh = ConfigManager::normalizeConfigValues(['sample_rate' => 5.0]);
+        $this->assertSame(1.0, $tooHigh['sample_rate']);
+
+        $valid = ConfigManager::normalizeConfigValues(['sample_rate' => 0.42]);
+        $this->assertEquals(0.42, $valid['sample_rate']);
+
+        $invalid = ConfigManager::normalizeConfigValues(['sample_rate' => 'not numeric']);
+        $this->assertSame(0.1, $invalid['sample_rate']);
+    }
+
+    public function testNormalizeConfigValuesClampsTimeout()
+    {
+        $low = ConfigManager::normalizeConfigValues(['timeout' => 0]);
+        $this->assertSame(1, $low['timeout']);
+
+        $high = ConfigManager::normalizeConfigValues(['timeout' => 999]);
+        $this->assertSame(60, $high['timeout']);
+
+        $valid = ConfigManager::normalizeConfigValues(['timeout' => 30]);
+        $this->assertSame(30, $valid['timeout']);
+    }
+
+    public function testNormalizeConfigValuesMasksInvalidFlags()
+    {
+        $negative = ConfigManager::normalizeConfigValues(['flags' => -1]);
+        $this->assertSame(FeatureFlags::ValidFlagsMask, $negative['flags']);
+
+        $highBits = ConfigManager::normalizeConfigValues([
+            'flags' => FeatureFlags::ValidFlagsMask | (1 << 30),
+        ]);
+        $this->assertSame(FeatureFlags::ValidFlagsMask, $highBits['flags']);
+
+        $junk = ConfigManager::normalizeConfigValues(['flags' => 'invalid']);
+        $this->assertSame(FeatureFlags::DefaultFlags & FeatureFlags::ValidFlagsMask, $junk['flags']);
+    }
+
+    public function testNormalizeConfigValuesFallsBackToDefaultApiUrlOnEmpty()
+    {
+        $empty = ConfigManager::normalizeConfigValues(['api_url' => '']);
+        $this->assertSame('https://ingress.perfbase.cloud', $empty['api_url']);
+
+        $missing = ConfigManager::normalizeConfigValues([]);
+        $this->assertSame('https://ingress.perfbase.cloud', $missing['api_url']);
+    }
+
+    public function testNormalizeConfigValuesCastsBooleans()
+    {
+        $result = ConfigManager::normalizeConfigValues([
+            'enabled'       => 1,
+            'debug'         => '1',
+            'log_errors'    => 0,
+            'profile_admin' => 'yes',
+            'profile_ajax'  => '',
+            'profile_cron'  => true,
+            'profile_cli'   => null,
+        ]);
+
+        $this->assertTrue($result['enabled']);
+        $this->assertTrue($result['debug']);
+        $this->assertFalse($result['log_errors']);
+        $this->assertTrue($result['profile_admin']);
+        $this->assertFalse($result['profile_ajax']);
+        $this->assertTrue($result['profile_cron']);
+        $this->assertFalse($result['profile_cli']);
+    }
+
     public function testValidateConfigWithValidFlagsBoundaries()
     {
         $config = TestData::getValidConfig();

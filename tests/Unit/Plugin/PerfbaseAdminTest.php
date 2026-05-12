@@ -156,11 +156,45 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $result = $this->admin->sanitize_settings([]);
 
         $this->assertFalse($result['enabled']);
-        $this->assertEquals('', $result['api_key']);
+        // Blank submission preserves the stored api_key — see "keep existing" rule.
+        $this->assertEquals('test-api-key-12345678901234567890', $result['api_key']);
         $this->assertEquals('https://ingress.perfbase.cloud', $result['api_url']);
         $this->assertEquals(0.1, $result['sample_rate']);
         $this->assertEquals(10, $result['timeout']);
         $this->assertEquals(array_merge(range(200, 299), range(500, 599)), $result['profile_http_status_codes']);
+    }
+
+    public function testSanitizeSettingsKeepsExistingApiKeyWhenBlank()
+    {
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $this->admin->sanitize_settings(['api_key' => '']);
+        $this->assertEquals('test-api-key-12345678901234567890', $result['api_key']);
+
+        // Submitting a new value should replace it.
+        $result = $this->admin->sanitize_settings(['api_key' => 'new-key']);
+        $this->assertEquals('new-key', $result['api_key']);
+    }
+
+    public function testSanitizeSettingsKeepsExistingProxyWhenBlank()
+    {
+        $config = TestData::getValidConfig();
+        $config['proxy'] = 'http://proxy.example.com:8080';
+
+        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
+        $mockPlugin->shouldReceive('get_config')->andReturn($config);
+        $mockPlugin->shouldReceive('get_perfbase')->andReturn(null);
+        $admin = new PerfbaseAdmin($mockPlugin);
+
+        Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('esc_url_raw')->returnArg();
+
+        $result = $admin->sanitize_settings(['proxy' => '']);
+        $this->assertEquals('http://proxy.example.com:8080', $result['proxy']);
+
+        $result = $admin->sanitize_settings(['proxy' => 'http://other.example:3128']);
+        $this->assertEquals('http://other.example:3128', $result['proxy']);
     }
 
     public function testSanitizeSettingsAllowsDisablingHttpStatusSubmission()
@@ -377,7 +411,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertTrue(true);
     }
 
-    public function testRenderApiKeyFieldEscapesOutput()
+    public function testRenderApiKeyFieldMasksStoredValue()
     {
         Functions\when('esc_attr')->alias(function($value) {
             return htmlspecialchars($value, ENT_QUOTES);
@@ -387,9 +421,58 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->admin->render_api_key_field();
         $output = ob_get_clean();
 
+        // The stored key (from TestData::getValidConfig) must never appear in the HTML.
+        $this->assertStringNotContainsString('test-api-key-12345678901234567890', $output);
+
         $this->assertStringContainsString('type="password"', $output);
         $this->assertStringContainsString('name="perfbase_settings[api_key]"', $output);
+        $this->assertStringContainsString('value=""', $output);
+        $this->assertStringContainsString('placeholder="••••••••"', $output);
+        $this->assertStringContainsString('Leave blank to keep', $output);
         $this->assertStringNotContainsString('<script>', $output);
+    }
+
+    public function testRenderApiKeyFieldWhenUnsetShowsNoPlaceholder()
+    {
+        $config = TestData::getValidConfig();
+        $config['api_key'] = '';
+
+        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
+        $mockPlugin->shouldReceive('get_config')->andReturn($config);
+        $mockPlugin->shouldReceive('get_perfbase')->andReturn(null);
+        $admin = new PerfbaseAdmin($mockPlugin);
+
+        Functions\when('esc_attr')->returnArg();
+
+        ob_start();
+        $admin->render_api_key_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('placeholder=""', $output);
+        $this->assertStringContainsString('You can find this', $output);
+    }
+
+    public function testRenderProxyFieldMasksStoredValue()
+    {
+        $config = TestData::getValidConfig();
+        $config['proxy'] = 'http://user:pass@proxy.example.com:8080';
+
+        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
+        $mockPlugin->shouldReceive('get_config')->andReturn($config);
+        $mockPlugin->shouldReceive('get_perfbase')->andReturn(null);
+        $admin = new PerfbaseAdmin($mockPlugin);
+
+        Functions\when('esc_attr')->returnArg();
+
+        ob_start();
+        $admin->render_proxy_field();
+        $output = ob_get_clean();
+
+        $this->assertStringNotContainsString('user:pass@proxy.example.com', $output);
+        $this->assertStringContainsString('name="perfbase_settings[proxy]"', $output);
+        $this->assertStringContainsString('value=""', $output);
+        $this->assertStringContainsString('placeholder="••••••••"', $output);
+        $this->assertStringContainsString('Leave blank to keep', $output);
     }
 
     public function testRenderEnabledFieldShowsCheckbox()

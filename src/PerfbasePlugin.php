@@ -303,8 +303,18 @@ class PerfbasePlugin {
      */
     private function getAjaxActionName(): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The action label is read-only trace metadata and is sanitized immediately below.
-        $action = isset($_REQUEST['action']) ? wp_unslash($_REQUEST['action']) : 'unknown';
+        // Read POST first, then GET — never $_REQUEST (which also folds in
+        // $_COOKIE). The action label is read-only trace metadata and is
+        // sanitized via sanitize_key() below.
+        // phpcs:disable WordPress.Security.NonceVerification.Missing,WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only trace label, sanitized below.
+        if (isset($_POST['action']) && is_scalar($_POST['action'])) {
+            $action = wp_unslash((string) $_POST['action']);
+        } elseif (isset($_GET['action']) && is_scalar($_GET['action'])) {
+            $action = wp_unslash((string) $_GET['action']);
+        } else {
+            $action = 'unknown';
+        }
+        // phpcs:enable WordPress.Security.NonceVerification.Missing,WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
         return sanitize_key((string) $action) ?: 'unknown';
     }

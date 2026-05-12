@@ -428,11 +428,15 @@ class PerfbaseAdmin {
      */
     public function render_api_key_field() {
         $config = $this->plugin->get_config();
-        $value = $config['api_key'] ?? '';
+        $hasStored = !empty($config['api_key']);
         ?>
-        <input type="password" name="perfbase_settings[api_key]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
+        <input type="password" name="perfbase_settings[api_key]" value="" autocomplete="off" placeholder="<?php echo $hasStored ? '••••••••' : ''; ?>" class="regular-text" />
         <p class="description">
-	            <?php esc_html_e('Your Perfbase API key. You can find this in your Perfbase project settings.', 'perfbase'); ?>
+            <?php if ($hasStored) : ?>
+                <?php esc_html_e('Stored. Leave blank to keep the existing value, or enter a new one to replace it.', 'perfbase'); ?>
+            <?php else : ?>
+                <?php esc_html_e('Your Perfbase API key. You can find this in your Perfbase project settings.', 'perfbase'); ?>
+            <?php endif; ?>
         </p>
         <?php
     }
@@ -510,11 +514,15 @@ class PerfbaseAdmin {
      */
     public function render_proxy_field() {
         $config = $this->plugin->get_config();
-        $value = $config['proxy'] ?? '';
+        $hasStored = !empty($config['proxy']);
         ?>
-        <input type="text" name="perfbase_settings[proxy]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
+        <input type="text" name="perfbase_settings[proxy]" value="" autocomplete="off" placeholder="<?php echo $hasStored ? '••••••••' : ''; ?>" class="regular-text" />
         <p class="description">
-	            <?php esc_html_e('Proxy server URL (optional). Format: http://username:password@proxy.example.com:8080', 'perfbase'); ?>
+            <?php if ($hasStored) : ?>
+                <?php esc_html_e('Stored. Leave blank to keep the existing value, or enter a new one to replace it.', 'perfbase'); ?>
+            <?php else : ?>
+                <?php esc_html_e('Proxy server URL (optional). Format: http://username:password@proxy.example.com:8080', 'perfbase'); ?>
+            <?php endif; ?>
         </p>
         <?php
     }
@@ -719,11 +727,22 @@ class PerfbaseAdmin {
 
         // Basic fields
         $sanitized['enabled'] = !empty($input['enabled']);
-        $sanitized['api_key'] = sanitize_text_field($input['api_key'] ?? '');
+
+        // Sensitive fields: keep existing value when submitted blank, so the
+        // masked admin form does not require the user to retype each save.
+        $submittedApiKey = sanitize_text_field((string) ($input['api_key'] ?? ''));
+        $sanitized['api_key'] = ($submittedApiKey === '' && !empty($existing['api_key']))
+            ? (string) $existing['api_key']
+            : $submittedApiKey;
+
         $sanitized['api_url'] = esc_url_raw($input['api_url'] ?? 'https://ingress.perfbase.cloud');
         $sanitized['sample_rate'] = max(0, min(1, (float) ($input['sample_rate'] ?? 0.1)));
         $sanitized['timeout'] = max(1, min(60, (int) ($input['timeout'] ?? 10)));
-        $sanitized['proxy'] = sanitize_text_field($input['proxy'] ?? '');
+
+        $submittedProxy = sanitize_text_field((string) ($input['proxy'] ?? ''));
+        $sanitized['proxy'] = ($submittedProxy === '' && !empty($existing['proxy']))
+            ? (string) $existing['proxy']
+            : $submittedProxy;
 
         // Profiling options
         $sanitized['profile_admin'] = !empty($input['profile_admin']);
