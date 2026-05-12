@@ -268,33 +268,63 @@ class PerfbasePlugin {
      *
      * @return AbstractWordPressProfiler|null
      */
-    private function createLifecycleForContext(): ?AbstractWordPressProfiler
-    {
+	    private function createLifecycleForContext(): ?AbstractWordPressProfiler
+	    {
         if (defined('WP_CLI') && WP_CLI && empty($this->config['profile_cli'])) {
             return null;
         }
 
-        // AJAX requests (detected via DOING_AJAX constant)
-        if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
-            return new AjaxRequestLifecycle((string) ($_REQUEST['action'] ?? 'unknown'), $this, $this->request_context);
-        }
+	        // AJAX requests (detected via DOING_AJAX constant)
+	        if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
+	            return new AjaxRequestLifecycle($this->getAjaxActionName(), $this, $this->request_context);
+	        }
 
         // Cron requests (detected via DOING_CRON constant)
         if (defined('DOING_CRON') && DOING_CRON && !empty($this->config['profile_cron'])) {
             return new CronLifecycle($this);
         }
 
-        // WP-CLI requests (detected via WP_CLI constant)
-        if (defined('WP_CLI') && WP_CLI && !empty($this->config['profile_cli'])) {
-            $command = $_SERVER['argv'][1] ?? 'unknown';
-            return new CliLifecycle($command, $this);
-        }
+	        // WP-CLI requests (detected via WP_CLI constant)
+	        if (defined('WP_CLI') && WP_CLI && !empty($this->config['profile_cli'])) {
+	            return new CliLifecycle($this->getCliCommandName(), $this);
+	        }
 
         // Default: standard HTTP request
-        return new HttpRequestLifecycle($this, $this->request_context);
+	        return new HttpRequestLifecycle($this, $this->request_context);
+	    }
+
+    /**
+     * Read the AJAX action name for low-cardinality trace grouping.
+     *
+     * @return string
+     */
+    private function getAjaxActionName(): string
+    {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- The action label is read-only trace metadata and is sanitized immediately below.
+        $action = isset($_REQUEST['action']) ? wp_unslash($_REQUEST['action']) : 'unknown';
+
+        return sanitize_key((string) $action) ?: 'unknown';
     }
 
-    // ------------------------------------------------------------------
+    /**
+     * Read the WP-CLI command name for trace grouping.
+     *
+     * @return string
+     */
+    private function getCliCommandName(): string
+    {
+        if (!isset($_SERVER['argv'][1]) || !is_scalar($_SERVER['argv'][1])) {
+            return 'unknown';
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized immediately below after unslashing.
+        $command = wp_unslash((string) $_SERVER['argv'][1]);
+        $command = sanitize_text_field($command);
+
+        return $command !== '' ? substr($command, 0, 128) : 'unknown';
+    }
+
+	    // ------------------------------------------------------------------
     // Attribute collection hooks (lightweight — set on SDK directly)
     // ------------------------------------------------------------------
 

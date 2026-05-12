@@ -48,11 +48,13 @@ abstract class BaseWordPressTest extends TestCase
         // Common WordPress function mocks
         Functions\when('__')->returnArg();
         Functions\when('esc_html__')->returnArg();
+        Functions\when('esc_html_e')->alias(function($text) { echo $text; });
         Functions\when('esc_html')->returnArg();
         Functions\when('esc_attr')->returnArg();
         Functions\when('esc_url_raw')->returnArg();
         Functions\when('esc_textarea')->returnArg();
         Functions\when('sanitize_text_field')->returnArg();
+        Functions\when('wp_unslash')->returnArg();
         Functions\when('sanitize_key')->alias(function($value) {
             $value = strtolower((string) $value);
             $value = preg_replace('/[^a-z0-9_\-]/', '_', $value);
@@ -69,6 +71,7 @@ abstract class BaseWordPressTest extends TestCase
         Functions\when('plugin_dir_path')->returnArg();
         Functions\when('plugin_dir_url')->returnArg();
         Functions\when('get_bloginfo')->justReturn('Test Site');
+        Functions\when('wp_get_environment_type')->justReturn('production');
         Functions\when('admin_url')->returnArg();
         Functions\when('wp_cache_delete')->justReturn(true);
         Functions\when('flush_rewrite_rules')->justReturn();

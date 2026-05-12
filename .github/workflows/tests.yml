@@ -78,8 +78,8 @@ jobs:
       - name: Run PHPStan
         run: composer phpstan
 
-      - name: Run PHPCS
-        run: composer phpcs || true  # Don't fail on coding standards (yet)
+      - name: Run WordPress security PHPCS
+        run: composer phpcs
 
   test-matrix-status:
     name: Test Matrix Status

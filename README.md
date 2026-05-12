@@ -336,11 +336,12 @@ Useful commands:
 ```bash
 composer test
 composer phpstan
+composer phpcs:syntax
 composer phpcs
 composer lint
 ```
 
-The repository includes unit, integration, and functional tests.
+The repository includes unit, integration, and functional tests. `composer phpcs` is the focused WordPress security gate for release checks; use `composer phpcs:syntax` for the lightweight PHP syntax-only check.
 
 ## Documentation
 
@@ -362,7 +363,7 @@ The generated ZIP is written to `dist/perfbase-<version>.zip` and includes produ
 
 Release checklist:
 
-1. Run `composer test`, `composer phpstan`, and `composer phpcs`.
+1. Run `composer test`, `composer phpstan`, `composer phpcs:syntax`, and `composer phpcs`.
 2. Tag the release as `v<version>`, for example `v1.2.3`.
 3. Push the tag. GitHub Actions builds, verifies, and uploads the installable ZIP to the GitHub Release.
 4. Use the same generated package contents for WordPress.org SVN.

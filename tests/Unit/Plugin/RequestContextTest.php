@@ -123,6 +123,94 @@ class RequestContextTest extends BaseWordPressTest
         $this->assertEquals(PERFBASE_PLUGIN_VERSION, $attributes['perfbase.version']);
     }
 
+    public function testGetRequestAttributesUnslashesSafeRequestMetadata()
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['REQUEST_URI'] = '/wp-json/\\?rest_route=\\/wp\\/v2\\/posts&action=heartbeat';
+        $_SERVER['HTTP_USER_AGENT'] = 'Browser\\/1.0';
+
+        Functions\when('wp_unslash')->alias(function($value) {
+            return is_string($value) ? stripslashes($value) : $value;
+        });
+        Functions\when('is_ssl')->justReturn(true);
+        Functions\when('get_bloginfo')->justReturn('6.0');
+        Functions\when('is_user_logged_in')->justReturn(false);
+        Functions\when('get_query_var')->justReturn(0);
+        Functions\when('wp_get_environment_type')->justReturn('production');
+        Functions\when('gethostname')->justReturn('webserver-01');
+        Functions\when('phpversion')->justReturn('8.2.0');
+
+        $attributes = $this->request_context->getRequestAttributes();
+
+        $this->assertEquals('POST /wp-json/', $attributes['action']);
+        $this->assertEquals('https://example.com/wp-json/', $attributes['http_url']);
+        $this->assertEquals('Browser/1.0', $attributes['user_agent']);
+        $this->assertEquals('/wp/v2/posts', $attributes['wordpress.rest_route']);
+        $this->assertEquals('heartbeat', $attributes['wordpress.ajax_action']);
+    }
+
+    public function testGetRequestAttributesSanitizesHostileRequestMetadata()
+    {
+        $_SERVER['REQUEST_METHOD'] = "TRACE\r\nInjected: yes";
+        $_SERVER['HTTP_HOST'] = "evil.com\r\nX-Bad: yes";
+        $_SERVER['REQUEST_URI'] = '/checkout/<script>alert(1)</script>?token=secret';
+        $_SERVER['HTTP_USER_AGENT'] = "Bad\r\nAgent <script>" . str_repeat('x', 600);
+
+        Functions\when('wp_unslash')->returnArg();
+        Functions\when('sanitize_text_field')->alias(function($value) {
+            $value = preg_replace('/[\r\n\t]+/', ' ', (string) $value);
+            $value = strip_tags((string) $value);
+            return trim((string) $value);
+        });
+        Functions\when('is_ssl')->justReturn(false);
+        Functions\when('get_bloginfo')->justReturn('6.0');
+        Functions\when('is_user_logged_in')->justReturn(false);
+        Functions\when('get_query_var')->justReturn(0);
+        Functions\when('wp_get_environment_type')->justReturn('production');
+        Functions\when('gethostname')->justReturn('webserver-01');
+        Functions\when('phpversion')->justReturn('8.2.0');
+
+        $attributes = $this->request_context->getRequestAttributes();
+
+        $this->assertEquals('GET /checkout/alert(1)', $attributes['action']);
+        $this->assertEquals('GET', $attributes['http_method']);
+        $this->assertEquals('http://evil.comX-Bad:yes/checkout/alert(1)', $attributes['http_url']);
+        $this->assertSame(512, strlen($attributes['user_agent']));
+        $this->assertStringNotContainsString("\r", $attributes['user_agent']);
+        $this->assertStringNotContainsString('<script>', $attributes['user_agent']);
+        $this->assertStringNotContainsString('token=secret', $attributes['http_url']);
+    }
+
+    public function testGetRequestAttributesSanitizesAndCapsQueryAttributes()
+    {
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['REQUEST_URI'] = '/wp-admin/admin.php?action=Heart Beat!&rest_route=/wp/v2/posts/<bad>' . str_repeat('r', 700) . '&page=Perfbase Settings<script>';
+        $_SERVER['HTTP_USER_AGENT'] = 'Test Agent';
+
+        Functions\when('wp_unslash')->returnArg();
+        Functions\when('sanitize_text_field')->alias(function($value) {
+            $value = strip_tags((string) $value);
+            return trim(preg_replace('/[\r\n\t]+/', ' ', $value));
+        });
+        Functions\when('is_ssl')->justReturn(false);
+        Functions\when('get_bloginfo')->justReturn('6.0');
+        Functions\when('is_user_logged_in')->justReturn(false);
+        Functions\when('get_query_var')->justReturn(0);
+        Functions\when('wp_get_environment_type')->justReturn('production');
+        Functions\when('gethostname')->justReturn('webserver-01');
+        Functions\when('phpversion')->justReturn('8.2.0');
+
+        $attributes = $this->request_context->getRequestAttributes();
+
+        $this->assertEquals('heart_beat', $attributes['wordpress.ajax_action']);
+        $this->assertEquals('perfbase_settings', $attributes['wordpress.admin_page']);
+        $this->assertSame(512, strlen($attributes['wordpress.rest_route']));
+        $this->assertStringStartsWith('/wp/v2/posts/', $attributes['wordpress.rest_route']);
+        $this->assertStringNotContainsString('<bad>', $attributes['wordpress.rest_route']);
+    }
+
     public function testGetRequestAttributesWithPostId()
     {
         $_SERVER['REQUEST_METHOD'] = 'GET';

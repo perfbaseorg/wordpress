@@ -34,11 +34,11 @@ define('PERFBASE_MIN_WP_VERSION', '5.0');
 if (version_compare(PHP_VERSION, PERFBASE_MIN_PHP_VERSION, '<')) {
     add_action('admin_notices', function() {
         echo '<div class="notice notice-error"><p>';
-        echo sprintf(
-            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
-            PERFBASE_MIN_PHP_VERSION,
-            PHP_VERSION
-        );
+	        echo sprintf(
+	            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
+	            esc_html(PERFBASE_MIN_PHP_VERSION),
+	            esc_html(PHP_VERSION)
+	        );
         echo '</p></div>';
     });
     return;
@@ -48,11 +48,11 @@ if (version_compare(PHP_VERSION, PERFBASE_MIN_PHP_VERSION, '<')) {
 if (version_compare($GLOBALS['wp_version'], PERFBASE_MIN_WP_VERSION, '<')) {
     add_action('admin_notices', function() {
         echo '<div class="notice notice-error"><p>';
-        echo sprintf(
-            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
-            PERFBASE_MIN_WP_VERSION,
-            $GLOBALS['wp_version']
-        );
+	        echo sprintf(
+	            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
+	            esc_html(PERFBASE_MIN_WP_VERSION),
+	            esc_html($GLOBALS['wp_version'])
+	        );
         echo '</p></div>';
     });
     return;
@@ -95,20 +95,20 @@ function perfbase_activate() {
     // Check system requirements during activation
     if (version_compare(PHP_VERSION, PERFBASE_MIN_PHP_VERSION, '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(sprintf(
-            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
-            PERFBASE_MIN_PHP_VERSION,
-            PHP_VERSION
-        ));
+	        wp_die(sprintf(
+	            esc_html__('Perfbase requires PHP version %s or higher. You are running PHP %s.', 'perfbase'),
+	            esc_html(PERFBASE_MIN_PHP_VERSION),
+	            esc_html(PHP_VERSION)
+	        ));
     }
 
     if (version_compare($GLOBALS['wp_version'], PERFBASE_MIN_WP_VERSION, '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(sprintf(
-            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
-            PERFBASE_MIN_WP_VERSION,
-            $GLOBALS['wp_version']
-        ));
+	        wp_die(sprintf(
+	            esc_html__('Perfbase requires WordPress version %s or higher. You are running WordPress %s.', 'perfbase'),
+	            esc_html(PERFBASE_MIN_WP_VERSION),
+	            esc_html($GLOBALS['wp_version'])
+	        ));
     }
 
     // Create default options

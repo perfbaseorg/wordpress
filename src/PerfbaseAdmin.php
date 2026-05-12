@@ -40,8 +40,36 @@ class PerfbaseAdmin {
     private function init() {
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_init', [$this, 'register_privacy_policy_content']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
         add_filter('plugin_action_links_' . plugin_basename(PERFBASE_PLUGIN_FILE), [$this, 'add_plugin_action_links']);
+    }
+
+    /**
+     * Register suggested privacy policy text with WordPress.
+     *
+     * @return void
+     */
+    public function register_privacy_policy_content() {
+        if (!function_exists('wp_add_privacy_policy_content')) {
+            return;
+        }
+
+        $config = $this->plugin->get_config();
+        $api_url = !empty($config['api_url']) ? (string) $config['api_url'] : 'https://ingress.perfbase.cloud';
+
+        $content = sprintf(
+            __(
+                'Perfbase is an external application performance monitoring service. When a Perfbase API key is configured and profiling is enabled, this site may send profiling traces to the configured Perfbase API endpoint, currently %s. Submitted traces may include performance timing data, call and error context, database/cache/HTTP/file-operation metadata depending on enabled feature flags, the URL path without the query string, user IP address, user agent, user ID when a visitor is logged in, hostname, environment, application version, PHP version, HTTP method, HTTP status code, and WordPress request context metadata. Perfbase does not submit profiling traces when the API key is missing or profiling is disabled.',
+                'perfbase'
+            ),
+            '<code>' . esc_url($api_url) . '</code>'
+        );
+
+        wp_add_privacy_policy_content(
+            __('Perfbase', 'perfbase'),
+            wp_kses_post(wpautop($content))
+        );
     }
 
     /**
@@ -288,17 +316,18 @@ class PerfbaseAdmin {
             <?php if (!$extension_available): ?>
                 <div class="notice notice-warning">
                     <p>
-                        <strong><?php _e('Warning:', 'perfbase'); ?></strong>
-                        <?php _e('The Perfbase PHP extension is not installed or not available. Profiling will not work without it.', 'perfbase'); ?>
+	                        <strong><?php esc_html_e('Warning:', 'perfbase'); ?></strong>
+	                        <?php esc_html_e('The Perfbase PHP extension is not installed or not available. Profiling will not work without it.', 'perfbase'); ?>
                     </p>
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty(sanitize_text_field(wp_unslash($_GET['settings-updated'] ?? '')))): ?>
-                <div class="notice notice-success is-dismissible">
-                    <p><?php _e('Settings saved.', 'perfbase'); ?></p>
-                </div>
-            <?php endif; ?>
+	            <?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only Settings API redirect flag used for an admin notice. ?>
+	            <?php if (!empty(sanitize_text_field(wp_unslash($_GET['settings-updated'] ?? '')))): ?>
+	                <div class="notice notice-success is-dismissible">
+	                    <p><?php esc_html_e('Settings saved.', 'perfbase'); ?></p>
+	                </div>
+	            <?php endif; ?>
 
             <form action="options.php" method="post">
                 <?php
@@ -309,38 +338,38 @@ class PerfbaseAdmin {
             </form>
 
             <div class="perfbase-info">
-                <h2><?php _e('System Information', 'perfbase'); ?></h2>
+	                <h2><?php esc_html_e('System Information', 'perfbase'); ?></h2>
                 <table class="widefat">
                     <tbody>
                         <tr>
-                            <th><?php _e('Plugin Version', 'perfbase'); ?></th>
+	                            <th><?php esc_html_e('Plugin Version', 'perfbase'); ?></th>
                             <td><?php echo esc_html(PERFBASE_PLUGIN_VERSION); ?></td>
                         </tr>
                         <tr>
-                            <th><?php _e('PHP Version', 'perfbase'); ?></th>
+	                            <th><?php esc_html_e('PHP Version', 'perfbase'); ?></th>
                             <td><?php echo esc_html(PHP_VERSION); ?></td>
                         </tr>
                         <tr>
-                            <th><?php _e('WordPress Version', 'perfbase'); ?></th>
+	                            <th><?php esc_html_e('WordPress Version', 'perfbase'); ?></th>
                             <td><?php echo esc_html(get_bloginfo('version')); ?></td>
                         </tr>
                         <tr>
-                            <th><?php _e('Perfbase Extension', 'perfbase'); ?></th>
+	                            <th><?php esc_html_e('Perfbase Extension', 'perfbase'); ?></th>
                             <td>
                                 <?php if ($extension_available): ?>
-                                    <span style="color: green;"><?php _e('Available', 'perfbase'); ?></span>
+	                                    <span style="color: green;"><?php esc_html_e('Available', 'perfbase'); ?></span>
                                 <?php else: ?>
-                                    <span style="color: red;"><?php _e('Not Available', 'perfbase'); ?></span>
+	                                    <span style="color: red;"><?php esc_html_e('Not Available', 'perfbase'); ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>
                         <tr>
-                            <th><?php _e('Profiling Status', 'perfbase'); ?></th>
+	                            <th><?php esc_html_e('Profiling Status', 'perfbase'); ?></th>
                             <td>
                                 <?php if ($config['enabled'] && !empty($config['api_key']) && $extension_available): ?>
-                                    <span style="color: green;"><?php _e('Active', 'perfbase'); ?></span>
+	                                    <span style="color: green;"><?php esc_html_e('Active', 'perfbase'); ?></span>
                                 <?php else: ?>
-                                    <span style="color: red;"><?php _e('Inactive', 'perfbase'); ?></span>
+	                                    <span style="color: red;"><?php esc_html_e('Inactive', 'perfbase'); ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -357,7 +386,7 @@ class PerfbaseAdmin {
      * @return void
      */
     public function render_general_section() {
-        echo '<p>' . __('Configure basic Perfbase settings.', 'perfbase') . '</p>';
+	        echo '<p>' . esc_html__('Configure basic Perfbase settings.', 'perfbase') . '</p>';
     }
 
     /**
@@ -366,7 +395,7 @@ class PerfbaseAdmin {
      * @return void
      */
     public function render_advanced_section() {
-        echo '<p>' . __('Advanced configuration options.', 'perfbase') . '</p>';
+	        echo '<p>' . esc_html__('Advanced configuration options.', 'perfbase') . '</p>';
     }
 
     /**
@@ -375,7 +404,7 @@ class PerfbaseAdmin {
      * @return void
      */
     public function render_profiling_section() {
-        echo '<p>' . __('Configure what should be profiled.', 'perfbase') . '</p>';
+	        echo '<p>' . esc_html__('Configure what should be profiled.', 'perfbase') . '</p>';
     }
 
     /**
@@ -384,7 +413,7 @@ class PerfbaseAdmin {
      * @return void
      */
     public function render_exclusions_section() {
-        echo '<p>' . __('Configure what should be excluded from profiling.', 'perfbase') . '</p>';
+	        echo '<p>' . esc_html__('Configure what should be excluded from profiling.', 'perfbase') . '</p>';
     }
 
     /**
@@ -398,7 +427,7 @@ class PerfbaseAdmin {
         ?>
         <input type="password" name="perfbase_settings[api_key]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
         <p class="description">
-            <?php _e('Your Perfbase API key. You can find this in your Perfbase project settings.', 'perfbase'); ?>
+	            <?php esc_html_e('Your Perfbase API key. You can find this in your Perfbase project settings.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -414,7 +443,7 @@ class PerfbaseAdmin {
         ?>
         <input type="checkbox" name="perfbase_settings[enabled]" value="1" <?php checked($checked); ?> />
         <p class="description">
-            <?php _e('Enable or disable Perfbase profiling.', 'perfbase'); ?>
+	            <?php esc_html_e('Enable or disable Perfbase profiling.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -431,7 +460,7 @@ class PerfbaseAdmin {
         <input type="number" name="perfbase_settings[sample_rate]" value="<?php echo esc_attr($value); ?>"
                min="0" max="1" step="0.01" class="small-text" />
         <p class="description">
-            <?php _e('Percentage of requests to profile (0.0 = none, 1.0 = all).', 'perfbase'); ?>
+	            <?php esc_html_e('Percentage of requests to profile (0.0 = none, 1.0 = all).', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -447,7 +476,7 @@ class PerfbaseAdmin {
         ?>
         <input type="url" name="perfbase_settings[api_url]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
         <p class="description">
-            <?php _e('Perfbase API endpoint URL.', 'perfbase'); ?>
+	            <?php esc_html_e('Perfbase API endpoint URL.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -464,7 +493,7 @@ class PerfbaseAdmin {
         <input type="number" name="perfbase_settings[timeout]" value="<?php echo esc_attr($value); ?>"
                min="1" max="60" class="small-text" />
         <p class="description">
-            <?php _e('API request timeout in seconds.', 'perfbase'); ?>
+	            <?php esc_html_e('API request timeout in seconds.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -480,7 +509,7 @@ class PerfbaseAdmin {
         ?>
         <input type="text" name="perfbase_settings[proxy]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
         <p class="description">
-            <?php _e('Proxy server URL (optional). Format: http://username:password@proxy.example.com:8080', 'perfbase'); ?>
+	            <?php esc_html_e('Proxy server URL (optional). Format: http://username:password@proxy.example.com:8080', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -496,7 +525,7 @@ class PerfbaseAdmin {
         ?>
         <input type="checkbox" name="perfbase_settings[profile_admin]" value="1" <?php checked($checked); ?> />
         <p class="description">
-            <?php _e('Profile requests in the WordPress admin area.', 'perfbase'); ?>
+	            <?php esc_html_e('Profile requests in the WordPress admin area.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -512,7 +541,7 @@ class PerfbaseAdmin {
         ?>
         <input type="checkbox" name="perfbase_settings[profile_ajax]" value="1" <?php checked($checked); ?> />
         <p class="description">
-            <?php _e('Profile AJAX requests.', 'perfbase'); ?>
+	            <?php esc_html_e('Profile AJAX requests.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -528,7 +557,7 @@ class PerfbaseAdmin {
         ?>
         <input type="checkbox" name="perfbase_settings[profile_cron]" value="1" <?php checked($checked); ?> />
         <p class="description">
-            <?php _e('Profile WordPress cron jobs.', 'perfbase'); ?>
+	            <?php esc_html_e('Profile WordPress cron jobs.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -544,7 +573,7 @@ class PerfbaseAdmin {
         ?>
         <input type="checkbox" name="perfbase_settings[profile_cli]" value="1" <?php checked($checked); ?> />
         <p class="description">
-            <?php _e('Profile WP-CLI command execution.', 'perfbase'); ?>
+	            <?php esc_html_e('Profile WP-CLI command execution.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -564,7 +593,7 @@ class PerfbaseAdmin {
         ?>
         <input type="text" name="perfbase_settings[profile_http_status_codes]" value="<?php echo esc_attr($value); ?>" class="regular-text" />
         <p class="description">
-            <?php _e('Comma-separated HTTP status codes or ranges to submit. Example: 200-299, 404. Leave empty to drop all HTTP submissions.', 'perfbase'); ?>
+	            <?php esc_html_e('Comma-separated HTTP status codes or ranges to submit. Example: 200-299, 404. Leave empty to drop all HTTP submissions.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -615,7 +644,7 @@ class PerfbaseAdmin {
         echo '</fieldset>';
 
         echo '<p class="description">';
-        _e('Select which features to enable during profiling. Note that some features may impact performance.', 'perfbase');
+	        esc_html_e('Select which features to enable during profiling. Note that some features may impact performance.', 'perfbase');
         echo '</p>';
     }
 
@@ -633,7 +662,7 @@ class PerfbaseAdmin {
         ?>
         <textarea name="perfbase_settings[include_http]" rows="5" class="large-text"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
-            <?php _e('Enter one HTTP include pattern per line. Use * to include everything.', 'perfbase'); ?>
+	            <?php esc_html_e('Enter one HTTP include pattern per line. Use * to include everything.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -652,7 +681,7 @@ class PerfbaseAdmin {
         ?>
         <textarea name="perfbase_settings[exclude_http]" rows="5" class="large-text"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
-            <?php _e('Enter one HTTP exclude pattern per line. Matching requests will not be profiled.', 'perfbase'); ?>
+	            <?php esc_html_e('Enter one HTTP exclude pattern per line. Matching requests will not be profiled.', 'perfbase'); ?>
         </p>
         <?php
     }
@@ -668,7 +697,7 @@ class PerfbaseAdmin {
         ?>
         <textarea name="perfbase_settings[exclude_user_agents]" rows="3" class="large-text"><?php echo esc_textarea($value); ?></textarea>
         <p class="description">
-            <?php _e('Enter one user agent pattern per line. Requests from matching user agents will not be profiled.', 'perfbase'); ?>
+	            <?php esc_html_e('Enter one user agent pattern per line. Requests from matching user agents will not be profiled.', 'perfbase'); ?>
         </p>
         <?php
     }

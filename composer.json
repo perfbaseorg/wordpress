@@ -46,9 +46,11 @@
     }
   },
   "scripts": {
-    "lint": "composer run-script phpstan && composer run-script phpcs",
+    "lint": "composer run-script phpstan && composer run-script phpcs:syntax && composer run-script phpcs:security",
     "phpstan": "phpstan analyse --memory-limit=2G",
-    "phpcs": "phpcs --standard=Generic --sniffs=Generic.PHP.Syntax src/",
+    "phpcs": "composer run-script phpcs:security",
+    "phpcs:security": "phpcs --standard=WordPress --sniffs=WordPress.Security.EscapeOutput,WordPress.Security.NonceVerification,WordPress.Security.SafeRedirect,WordPress.Security.ValidatedSanitizedInput,WordPress.DB.PreparedSQL,WordPress.DB.PreparedSQLPlaceholders perfbase.php src/",
+    "phpcs:syntax": "phpcs --standard=Generic --sniffs=Generic.PHP.Syntax perfbase.php src/ tests/",
     "test": "phpunit"
   },
   "extra": {

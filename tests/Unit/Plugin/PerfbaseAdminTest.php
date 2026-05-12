@@ -319,6 +319,36 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('Settings', $result[0]);
     }
 
+    public function testRegisterPrivacyPolicyContentDisclosesPerfbaseSubmission()
+    {
+        Functions\when('esc_url')->returnArg();
+        Functions\when('wpautop')->alias(function ($text) {
+            return '<p>' . $text . '</p>';
+        });
+        Functions\when('wp_kses_post')->returnArg();
+        Functions\expect('wp_add_privacy_policy_content')
+            ->once()
+            ->with(Mockery::any(), Mockery::on(function ($content) {
+                $this->assertStringContainsString('external application performance monitoring service', $content);
+                $this->assertStringContainsString('https://ingress.perfbase.cloud', $content);
+                $this->assertStringContainsString('profiling traces', $content);
+                $this->assertStringContainsString('URL path without the query string', $content);
+                $this->assertStringContainsString('user IP address', $content);
+                $this->assertStringContainsString('user agent', $content);
+                $this->assertStringContainsString('user ID when a visitor is logged in', $content);
+                $this->assertStringContainsString('hostname', $content);
+                $this->assertStringContainsString('environment', $content);
+                $this->assertStringContainsString('application version', $content);
+                $this->assertStringContainsString('HTTP status code', $content);
+                $this->assertStringContainsString('WordPress request context metadata', $content);
+                $this->assertStringContainsString('API key is missing or profiling is disabled', $content);
+
+                return true;
+            }));
+
+        $this->admin->register_privacy_policy_content();
+    }
+
     public function testEnqueueAdminScriptsOnlyOnSettingsPage()
     {
         Functions\expect('wp_enqueue_style')

@@ -7,6 +7,13 @@ namespace Perfbase\WordPress\Helpers;
  */
 class RequestContext
 {
+    private const MAX_METHOD_LENGTH = 16;
+    private const MAX_HOST_LENGTH = 255;
+    private const MAX_PATH_LENGTH = 2048;
+    private const MAX_USER_AGENT_LENGTH = 512;
+    private const MAX_QUERY_VALUE_LENGTH = 512;
+    private const MAX_QUERY_KEY_LENGTH = 128;
+
     /**
      * Get span name for the current request
      *
@@ -77,18 +84,15 @@ class RequestContext
     public function getRequestAttributes(): array
     {
         // Get action in format "GET /path" (without query parameters)
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+        $method = $this->getRequestMethod();
+        $requestUri = $this->getServerValue('REQUEST_URI', '/');
 
         // Strip query parameters from action to avoid cardinality explosion
-        $path = parse_url($requestUri, PHP_URL_PATH) ?: $requestUri;
+        $path = $this->extractRequestPath($requestUri);
         $action = sprintf('%s %s', $method, $path);
 
         // Get hostname
-        $hostname = gethostname();
-        if (!is_string($hostname)) {
-            $hostname = '';
-        }
+        $hostname = $this->sanitizeAttributeValue(gethostname(), self::MAX_HOST_LENGTH);
 
         // Get environment
         $environment = $this->getEnvironment();
@@ -102,8 +106,11 @@ class RequestContext
         $attributes = [
             // Core attributes matching ClickHouse schema
             'action' => $action,
-            'user_ip' => \Perfbase\SDK\Utils\EnvironmentUtils::getUserIp() ?? '',
-            'user_agent' => \Perfbase\SDK\Utils\EnvironmentUtils::getUserUserAgent() ?? '',
+            'user_ip' => $this->getUserIp(),
+            'user_agent' => $this->sanitizeAttributeValue(
+                $this->getServerValue('HTTP_USER_AGENT', ''),
+                self::MAX_USER_AGENT_LENGTH
+            ),
             'hostname' => $hostname,
             'environment' => $environment,
 
@@ -160,17 +167,17 @@ class RequestContext
 
         // Track AJAX action
         if (isset($params['action'])) {
-            $attributes['wordpress.ajax_action'] = (string) $params['action'];
+            $attributes['wordpress.ajax_action'] = $this->sanitizeKeyAttribute($params['action']);
         }
 
         // Track REST API route
         if (isset($params['rest_route'])) {
-            $attributes['wordpress.rest_route'] = (string) $params['rest_route'];
+            $attributes['wordpress.rest_route'] = $this->sanitizePathAttribute($params['rest_route']);
         }
 
         // Track admin page
         if (isset($params['page'])) {
-            $attributes['wordpress.admin_page'] = (string) $params['page'];
+            $attributes['wordpress.admin_page'] = $this->sanitizeKeyAttribute($params['page']);
         }
     }
 
@@ -336,11 +343,14 @@ class RequestContext
     public function getCurrentUrl(): string
     {
         $protocol = is_ssl() ? 'https://' : 'http://';
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $host = $this->sanitizeHost($this->getServerValue('HTTP_HOST', ''));
+        $uri = $this->getServerValue('REQUEST_URI', '');
+        if ($uri === '') {
+            return $protocol . $host;
+        }
 
         // Strip query string to avoid leaking sensitive params
-        $path = parse_url($uri, PHP_URL_PATH) ?: $uri;
+        $path = $this->extractRequestPath($uri);
 
         return $protocol . $host . $path;
     }
@@ -362,9 +372,9 @@ class RequestContext
         }
 
         // Check path-based include/exclude filters
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $path = parse_url($requestUri, PHP_URL_PATH) ?: $requestUri;
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $requestUri = $this->getServerValue('REQUEST_URI', '/');
+        $path = $this->extractRequestPath($requestUri);
+        $method = $this->getRequestMethod();
 
         $components = [
             $path,
@@ -386,7 +396,10 @@ class RequestContext
         }
 
         // Check excluded user agents
-        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $userAgent = $this->sanitizeAttributeValue(
+            $this->getServerValue('HTTP_USER_AGENT', ''),
+            self::MAX_USER_AGENT_LENGTH
+        );
         $excludeAgents = $config['exclude_user_agents'] ?? [];
         if (is_array($excludeAgents)) {
             foreach ($excludeAgents as $excludedAgent) {
@@ -397,5 +410,150 @@ class RequestContext
         }
 
         return true;
+    }
+
+    /**
+     * Read and unslash a server value when WordPress helpers are available.
+     */
+    private function getServerValue(string $key, string $default = ''): string
+    {
+        if (!isset($_SERVER[$key]) || !is_scalar($_SERVER[$key])) {
+            return $default;
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- Centralized unslash happens immediately below.
+        $value = $_SERVER[$key];
+
+        return $this->unslash((string) $value);
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     */
+    private function unslash($value)
+    {
+        if (function_exists('wp_unslash')) {
+            return wp_unslash($value);
+        }
+
+        if (is_array($value)) {
+            return array_map([$this, 'unslash'], $value);
+        }
+
+        return is_string($value) ? stripslashes($value) : $value;
+    }
+
+    private function getRequestMethod(): string
+    {
+        $method = strtoupper($this->getServerValue('REQUEST_METHOD', 'GET'));
+        $method = preg_replace('/[^A-Z]/', '', $method);
+        $allowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+        if (
+            !is_string($method) ||
+            $method === '' ||
+            strlen($method) > self::MAX_METHOD_LENGTH ||
+            !in_array($method, $allowedMethods, true)
+        ) {
+            return 'GET';
+        }
+
+        return $method;
+    }
+
+    private function extractRequestPath(string $requestUri): string
+    {
+        $path = parse_url($requestUri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            $path = '/';
+        }
+
+        $path = $this->sanitizeAttributeValue($path, self::MAX_PATH_LENGTH);
+        $path = preg_replace('/[^A-Za-z0-9\-._~!$&\'()*+,;=:@\/%]/', '', $path);
+        $path = is_string($path) ? $path : '/';
+
+        if ($path === '' || $path[0] !== '/') {
+            $path = '/' . ltrim($path, '/');
+        }
+
+        return $this->truncate($path, self::MAX_PATH_LENGTH);
+    }
+
+    private function sanitizeHost(string $host): string
+    {
+        $host = $this->sanitizeAttributeValue($host, self::MAX_HOST_LENGTH);
+        $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', $host);
+
+        return is_string($host) ? $this->truncate($host, self::MAX_HOST_LENGTH) : '';
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function sanitizeAttributeValue($value, int $maxLength): string
+    {
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        $value = $this->unslash((string) $value);
+        if (function_exists('sanitize_text_field')) {
+            $value = sanitize_text_field($value);
+        } else {
+            $value = strip_tags($value);
+            $value = preg_replace('/[\x00-\x1F\x7F]+/', ' ', $value);
+            $value = is_string($value) ? trim($value) : '';
+        }
+
+        return $this->truncate((string) $value, $maxLength);
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function sanitizePathAttribute($value): string
+    {
+        $value = $this->sanitizeAttributeValue($value, self::MAX_QUERY_VALUE_LENGTH);
+        $value = preg_replace('/[^A-Za-z0-9\-._~!$&\'()*+,;=:@\/%]/', '', $value);
+
+        return is_string($value) ? $this->truncate($value, self::MAX_QUERY_VALUE_LENGTH) : '';
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function sanitizeKeyAttribute($value): string
+    {
+        $value = $this->sanitizeAttributeValue($value, self::MAX_QUERY_KEY_LENGTH);
+
+        if (function_exists('sanitize_key')) {
+            return $this->truncate(sanitize_key($value), self::MAX_QUERY_KEY_LENGTH);
+        }
+
+        $value = strtolower($value);
+        $value = preg_replace('/[^a-z0-9_\-]/', '_', $value);
+        $value = preg_replace('/_+/', '_', is_string($value) ? $value : '');
+
+        return $this->truncate(trim((string) $value, '_'), self::MAX_QUERY_KEY_LENGTH);
+    }
+
+    private function getUserIp(): string
+    {
+        $userIp = \Perfbase\SDK\Utils\EnvironmentUtils::getUserIp();
+        if (!is_string($userIp) || filter_var($userIp, FILTER_VALIDATE_IP) === false) {
+            return '';
+        }
+
+        return $userIp;
+    }
+
+    private function truncate(string $value, int $maxLength): string
+    {
+        if (strlen($value) <= $maxLength) {
+            return $value;
+        }
+
+        return substr($value, 0, $maxLength);
     }
 }
