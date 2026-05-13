@@ -2,128 +2,450 @@
  * Perfbase WordPress Plugin Admin Styles
  */
 
-.perfbase-info {
-    margin-top: 20px;
-    padding: 20px;
+.perfbase-admin-page {
+    max-width: 1180px;
+}
+
+.perfbase-settings-form {
+    margin-top: 18px;
+}
+
+.perfbase-hero,
+.perfbase-summary,
+.perfbase-card,
+.perfbase-sticky-save {
+    box-sizing: border-box;
+}
+
+.perfbase-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin: 0 0 16px;
+    padding: 22px 24px;
     background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.perfbase-info h2 {
-    margin-top: 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e5e5e5;
+.perfbase-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
 }
 
-.perfbase-info table {
-    margin-top: 15px;
-}
-
-.perfbase-info th {
-    width: 200px;
-    text-align: left;
-    font-weight: 600;
-    padding: 8px 12px;
-}
-
-.perfbase-info td {
-    padding: 8px 12px;
-}
-
-.perfbase-section {
-    margin-bottom: 20px;
-}
-
-.perfbase-field-group {
-    margin-bottom: 15px;
-}
-
-.perfbase-field-group label {
+.perfbase-logo-image {
     display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
+    flex: 0 0 auto;
+    width: min(178px, 32vw);
+    height: auto;
+    max-height: 40px;
+    object-fit: contain;
 }
 
-.perfbase-field-group .description {
-    margin-top: 5px;
-    font-style: italic;
-    color: #666;
-}
-
-.perfbase-status-active {
-    color: #00a32a;
-    font-weight: 600;
-}
-
-.perfbase-status-inactive {
-    color: #d63638;
-    font-weight: 600;
-}
-
-.perfbase-warning {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 4px;
-    padding: 12px;
-    margin: 15px 0;
-}
-
-.perfbase-warning .dashicons {
-    color: #856404;
-    margin-right: 8px;
-}
-
-.perfbase-flags fieldset {
-    border: none;
+.perfbase-brand h1 {
+    margin: 0;
     padding: 0;
+    color: #1d2327;
+    font-size: 21px;
+    line-height: 1.2;
+}
+
+.perfbase-brand p {
+    margin: 5px 0 0;
+    color: #646970;
+    font-size: 13px;
+}
+
+.perfbase-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.perfbase-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 2px 9px;
+    border: 1px solid #c3c4c7;
+    border-radius: 999px;
+    background: #f6f7f7;
+    color: #3c434a;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.perfbase-badge-success {
+    border-color: #8ed1a5;
+    background: #edfaef;
+    color: #006b2d;
+}
+
+.perfbase-badge-warning {
+    border-color: #f0c36d;
+    background: #fff8e5;
+    color: #7a4d00;
+}
+
+.perfbase-badge-error {
+    border-color: #f1a2a8;
+    background: #fcf0f1;
+    color: #8a2424;
+}
+
+.perfbase-badge-neutral {
+    border-color: #c3c4c7;
+    background: #f6f7f7;
+    color: #3c434a;
+}
+
+.perfbase-notice-slot {
+    margin: 0 0 16px;
+}
+
+.perfbase-notice-slot:empty {
+    display: none;
+}
+
+.perfbase-notice-slot .notice {
     margin: 0;
 }
 
-.perfbase-flags label {
+.perfbase-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.perfbase-summary-item {
+    min-width: 0;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+}
+
+.perfbase-summary-item > span,
+.perfbase-system-item > span:not(.perfbase-badge) {
     display: block;
-    margin-bottom: 8px;
-    font-weight: normal;
+    margin-bottom: 5px;
+    color: #646970;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-transform: uppercase;
 }
 
-.perfbase-flags input[type="checkbox"] {
-    margin-right: 8px;
+.perfbase-summary-item strong,
+.perfbase-system-item strong {
+    display: block;
+    overflow: hidden;
+    color: #1d2327;
+    font-size: 14px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.perfbase-textarea-large {
+.perfbase-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.perfbase-primary-grid {
+    margin-bottom: 16px;
+}
+
+.perfbase-card {
+    min-width: 0;
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.perfbase-card-full {
+    grid-column: 1 / -1;
+}
+
+.perfbase-advanced-options {
+    display: none;
+}
+
+.perfbase-admin-page.is-showing-advanced .perfbase-advanced-options {
+    display: block;
+}
+
+.perfbase-admin-page.is-showing-advanced .perfbase-advanced-toggle {
+    border-color: #2271b1;
+    color: #135e96;
+}
+
+.perfbase-advanced-heading {
+    margin: 4px 0 12px;
+}
+
+.perfbase-advanced-heading h2 {
+    margin: 0;
+    color: #1d2327;
+    font-size: 16px;
+    line-height: 1.35;
+}
+
+.perfbase-advanced-heading p {
+    margin: 4px 0 0;
+    color: #646970;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.perfbase-card-header {
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.perfbase-card-header h2 {
+    margin: 0;
+    color: #1d2327;
+    font-size: 15px;
+    line-height: 1.35;
+}
+
+.perfbase-card-header p {
+    margin: 6px 0 0;
+    color: #646970;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.perfbase-profiling-card.is-muted .perfbase-toggle-grid {
+    opacity: 0.72;
+}
+
+.perfbase-field-grid,
+.perfbase-toggle-grid,
+.perfbase-textarea-grid,
+.perfbase-system-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.perfbase-field-wide,
+.perfbase-system-card .perfbase-system-grid {
+    grid-column: 1 / -1;
+}
+
+.perfbase-field-label {
+    display: block;
+    margin-bottom: 7px;
+    color: #1d2327;
+    font-weight: 600;
+}
+
+.perfbase-field-control {
+    min-width: 0;
+}
+
+.perfbase-input,
+.perfbase-textarea,
+.perfbase-field-control .regular-text {
     width: 100%;
-    max-width: 600px;
+    max-width: 100%;
 }
 
-/* WordPress admin compatibility */
-.perfbase-admin-page .form-table th {
-    width: 200px;
+.perfbase-field-control .small-text {
+    width: 96px;
 }
 
-.perfbase-admin-page .form-table td {
-    padding-left: 20px;
+.perfbase-field-control input[type="checkbox"] {
+    margin-top: 2px;
 }
 
-.perfbase-admin-page .form-table .description {
-    margin-top: 5px;
+.perfbase-field-control .description {
+    margin: 6px 0 0;
+    color: #646970;
+    font-size: 12px;
+    line-height: 1.45;
 }
 
-/* Responsive adjustments */
+.perfbase-api-key-feedback,
+.perfbase-sample-rate-feedback {
+    margin-top: 7px;
+    color: #006b2d;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.perfbase-api-key-feedback.is-muted {
+    color: #646970;
+}
+
+.perfbase-api-key-feedback.is-success {
+    color: #006b2d;
+}
+
+.perfbase-api-key-feedback.is-error,
+.perfbase-sample-rate-feedback.is-error {
+    color: #8a2424;
+}
+
+.perfbase-toggle-grid .perfbase-field {
+    padding: 13px 14px;
+    border: 1px solid #f0f0f1;
+    border-radius: 8px;
+    background: #fbfbfc;
+}
+
+.perfbase-toggle-grid .perfbase-field-label {
+    margin-bottom: 8px;
+}
+
+.perfbase-flags-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin: -4px 0 12px;
+}
+
+.perfbase-flags-count {
+    color: #646970;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.perfbase-flag-groups {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.perfbase-flag-group {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.perfbase-flag-group legend {
+    margin-bottom: 9px;
+    color: #1d2327;
+    font-weight: 600;
+}
+
+.perfbase-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 24px;
+    margin-bottom: 8px;
+    color: #3c434a;
+    line-height: 1.35;
+}
+
+.perfbase-check-row input {
+    flex: 0 0 auto;
+    margin-top: 1px;
+}
+
+.perfbase-textarea {
+    min-height: 118px;
+    resize: vertical;
+}
+
+.perfbase-system-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.perfbase-system-item {
+    min-width: 0;
+}
+
+.perfbase-sticky-save {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.perfbase-sticky-save span {
+    color: #646970;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.perfbase-admin-page.has-unsaved-changes .perfbase-sticky-save {
+    display: flex;
+}
+
+@media screen and (max-width: 1080px) {
+    .perfbase-summary,
+    .perfbase-system-grid,
+    .perfbase-flag-groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .perfbase-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media screen and (max-width: 782px) {
-    .perfbase-info th,
-    .perfbase-info td {
-        display: block;
-        width: auto;
-        padding: 8px 0;
+    .perfbase-admin-page {
+        margin-right: 10px;
     }
 
-    .perfbase-info th {
-        border-bottom: none;
-        font-weight: 600;
+    .perfbase-hero {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 18px;
     }
 
-    .perfbase-info td {
-        border-bottom: 1px solid #e5e5e5;
-        margin-bottom: 10px;
+    .perfbase-hero-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .perfbase-summary,
+    .perfbase-field-grid,
+    .perfbase-toggle-grid,
+    .perfbase-textarea-grid,
+    .perfbase-system-grid,
+    .perfbase-flag-groups {
+        grid-template-columns: 1fr;
+    }
+
+    .perfbase-card {
+        padding: 16px;
+    }
+
+    .perfbase-sticky-save {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .perfbase-sticky-save .button {
+        justify-content: center;
+        text-align: center;
     }
 }

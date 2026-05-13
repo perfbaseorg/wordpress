@@ -5,6 +5,7 @@ namespace Perfbase\WordPress\Tests\Unit\Plugin;
 use Brain\Monkey\Functions;
 use Mockery;
 use Perfbase\SDK\FeatureFlags;
+use Perfbase\SDK\Perfbase as PerfbaseClient;
 use Perfbase\WordPress\PerfbaseAdmin;
 use Perfbase\WordPress\PerfbasePlugin;
 use Perfbase\WordPress\Helpers\ConfigManager;
@@ -426,8 +427,11 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertStringContainsString('type="password"', $output);
         $this->assertStringContainsString('name="perfbase_settings[api_key]"', $output);
+        $this->assertStringContainsString('id="perfbase-api-key"', $output);
+        $this->assertStringContainsString('data-has-stored="1"', $output);
         $this->assertStringContainsString('value=""', $output);
         $this->assertStringContainsString('placeholder="••••••••"', $output);
+        $this->assertStringContainsString('perfbase-api-key-feedback', $output);
         $this->assertStringContainsString('Leave blank to keep', $output);
         $this->assertStringNotContainsString('<script>', $output);
     }
@@ -470,6 +474,8 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertStringNotContainsString('user:pass@proxy.example.com', $output);
         $this->assertStringContainsString('name="perfbase_settings[proxy]"', $output);
+        $this->assertStringContainsString('id="perfbase-proxy"', $output);
+        $this->assertStringContainsString('data-has-stored="1"', $output);
         $this->assertStringContainsString('value=""', $output);
         $this->assertStringContainsString('placeholder="••••••••"', $output);
         $this->assertStringContainsString('Leave blank to keep', $output);
@@ -485,6 +491,7 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
         $this->assertStringContainsString('type="checkbox"', $output);
         $this->assertStringContainsString('name="perfbase_settings[enabled]"', $output);
+        $this->assertStringContainsString('id="perfbase-enabled"', $output);
     }
 
     public function testRenderProfileCliFieldShowsCheckbox()
@@ -524,6 +531,21 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('min="0"', $output);
         $this->assertStringContainsString('max="1"', $output);
         $this->assertStringContainsString('step="0.01"', $output);
+        $this->assertStringContainsString('perfbase-sample-rate-feedback', $output);
+    }
+
+    public function testRenderFlagsFieldGroupsCapabilities()
+    {
+        ob_start();
+        $this->admin->render_flags_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('perfbase-flag-groups', $output);
+        $this->assertStringContainsString('perfbase-flags-count', $output);
+        $this->assertStringContainsString('Timing and runtime', $output);
+        $this->assertStringContainsString('Application behavior', $output);
+        $this->assertStringContainsString('Integrations', $output);
+        $this->assertStringContainsString('Files and processes', $output);
     }
 
     public function testRenderTimeoutFieldHasValidation()
@@ -575,33 +597,133 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('name="perfbase_settings[exclude_user_agents]"', $output);
     }
 
-    public function testRenderSettingsPageShowsSavedNoticeWithSanitizedFlag()
+    public function testRenderSettingsPageProvidesNativeNoticeSlotAfterHero()
     {
-        $_GET['settings-updated'] = '1';
-
         Functions\when('current_user_can')->justReturn(true);
         Functions\when('get_admin_page_title')->justReturn('Perfbase Settings');
-        Functions\when('sanitize_text_field')->returnArg();
-        Functions\when('wp_unslash')->returnArg();
         Functions\when('settings_fields')->justReturn();
-        Functions\when('do_settings_sections')->justReturn();
-        Functions\when('submit_button')->justReturn();
         Functions\when('get_bloginfo')->alias(function ($field) {
             return $field === 'version' ? '6.8.0' : '';
         });
-        Functions\when('__')->alias(function ($text) {
-            return $text;
-        });
-        Functions\when('_e')->alias(function ($text) {
-            echo $text;
-        });
-        Functions\when('esc_html')->returnArg();
 
         ob_start();
         $this->admin->render_settings_page();
         $output = ob_get_clean();
 
-        $this->assertStringContainsString('Settings saved.', $output);
+        $heroPosition = strpos($output, 'perfbase-hero');
+        $noticePosition = strpos($output, 'perfbase-notice-slot');
+        $summaryPosition = strpos($output, 'perfbase-summary');
+
+        $this->assertStringContainsString('perfbase-notice-slot', $output);
+        $this->assertStringNotContainsString('Settings saved.', $output);
+        $this->assertNotFalse($heroPosition);
+        $this->assertNotFalse($noticePosition);
+        $this->assertNotFalse($summaryPosition);
+        $this->assertLessThan($noticePosition, $heroPosition);
+        $this->assertLessThan($summaryPosition, $noticePosition);
+    }
+
+    public function testRenderSettingsPageUsesBrandedCardLayout()
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('get_admin_page_title')->justReturn('Perfbase Settings');
+        Functions\when('settings_fields')->justReturn();
+        Functions\when('get_bloginfo')->alias(function ($field) {
+            return $field === 'version' ? '6.9.4' : '';
+        });
+
+        ob_start();
+        $this->admin->render_settings_page();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('perfbase-admin-page', $output);
+        $this->assertStringContainsString('perfbase-hero', $output);
+        $this->assertStringContainsString('perfbase-notice-slot', $output);
+        $this->assertStringContainsString('perfbase-summary', $output);
+        $this->assertStringContainsString('perfbase-primary-grid', $output);
+        $this->assertStringContainsString('perfbase-card-connection', $output);
+        $this->assertStringContainsString('perfbase-card-basic-profiling', $output);
+        $this->assertStringContainsString('perfbase-card-sampling', $output);
+        $this->assertStringContainsString('perfbase-profiling-card', $output);
+        $this->assertStringContainsString('perfbase-system-card', $output);
+        $this->assertStringContainsString('perfbase-sticky-save', $output);
+        $this->assertStringContainsString('Extension missing', $output);
+    }
+
+    public function testRenderSettingsPageHidesAdvancedOptionsByDefault()
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('settings_fields')->justReturn();
+        Functions\when('get_bloginfo')->alias(function ($field) {
+            return $field === 'version' ? '6.9.4' : '';
+        });
+
+        ob_start();
+        $this->admin->render_settings_page();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('class="button perfbase-advanced-toggle"', $output);
+        $this->assertStringContainsString('aria-expanded="false"', $output);
+        $this->assertStringContainsString('aria-controls="perfbase-advanced-options"', $output);
+        $this->assertStringContainsString('Show advanced options', $output);
+        $this->assertStringContainsString('id="perfbase-advanced-options"', $output);
+        $this->assertStringContainsString('Connection Details', $output);
+        $this->assertStringContainsString('Control whether this site sends request traces.', $output);
+        $this->assertStringContainsString('name="perfbase_settings[enabled]"', $output);
+        $this->assertStringContainsString('name="perfbase_settings[sample_rate]"', $output);
+        $this->assertStringContainsString('Status Filtering', $output);
+        $this->assertStringContainsString('Plugin version', $output);
+        $this->assertStringContainsString('WordPress Version', $output);
+        $this->assertStringNotContainsString('<span>Endpoint</span>', $output);
+    }
+
+    public function testRenderSettingsPageShowsSystemBadges()
+    {
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('get_admin_page_title')->justReturn('Perfbase Settings');
+        Functions\when('settings_fields')->justReturn();
+        Functions\when('get_bloginfo')->alias(function ($field) {
+            return $field === 'version' ? '6.9.4' : '';
+        });
+
+        ob_start();
+        $this->admin->render_settings_page();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('perfbase-badge perfbase-badge-warning', $output);
+        $this->assertStringContainsString('Plugin Version', $output);
+        $this->assertStringContainsString('WordPress Version', $output);
+        $this->assertStringContainsString('Perfbase Extension', $output);
+        $this->assertStringContainsString('Profiling Status', $output);
+    }
+
+    public function testRenderSettingsPageShowsExtensionVersion()
+    {
+        $mockPerfbase = Mockery::mock(PerfbaseClient::class);
+        $mockPerfbase->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
+        $mockPlugin->shouldReceive('get_config')
+            ->andReturn(TestData::getValidConfig());
+        $mockPlugin->shouldReceive('get_perfbase')
+            ->andReturn($mockPerfbase);
+
+        Functions\when('current_user_can')->justReturn(true);
+        Functions\when('settings_fields')->justReturn();
+        Functions\when('perfbase_version')->justReturn('1.0.121');
+        Functions\when('get_bloginfo')->alias(function ($field) {
+            return $field === 'version' ? '6.9.4' : '';
+        });
+
+        $admin = new PerfbaseAdmin($mockPlugin);
+
+        ob_start();
+        $admin->render_settings_page();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('Available (v1.0.121)', $output);
+        $this->assertStringNotContainsString('Extension missing', $output);
     }
 
     public function testSanitizeSettingsMigratesLegacyExcludedPaths()

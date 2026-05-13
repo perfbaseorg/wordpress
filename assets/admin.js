@@ -5,205 +5,263 @@
 (function($) {
     'use strict';
 
-    $(document).ready(function() {
-        // Initialize admin functionality
-        PerfbaseAdmin.init();
-    });
-
     var PerfbaseAdmin = {
-
-        /**
-         * Initialize admin functionality
-         */
         init: function() {
-            this.bindEvents();
-            this.validateSettings();
-            this.toggleAdvancedSettings();
-        },
+            this.$page = $('.perfbase-admin-page');
+            this.$form = $('.perfbase-settings-form');
 
-        /**
-         * Bind event handlers
-         */
-        bindEvents: function() {
-            // Enable/disable profiling toggle
-            $('input[name="perfbase_settings[enabled]"]').on('change', this.toggleProfiling);
-
-            // API key validation
-            $('input[name="perfbase_settings[api_key]"]').on('blur', this.validateApiKey);
-
-            // Sample rate validation
-            $('input[name="perfbase_settings[sample_rate]"]').on('input', this.validateSampleRate);
-
-            // Advanced settings toggle
-            $('.perfbase-advanced-toggle').on('click', this.toggleAdvancedSettings);
-
-            // Flag checkboxes
-            $('input[name="perfbase_settings[flags][]"]').on('change', this.updateFlags);
-
-            // Test connection button
-            $('.perfbase-test-connection').on('click', this.testConnection);
-        },
-
-        /**
-         * Toggle profiling enabled/disabled
-         */
-        toggleProfiling: function() {
-            var enabled = $(this).is(':checked');
-            var $form = $(this).closest('form');
-
-            if (enabled) {
-                $form.find('.perfbase-profiling-options').show();
-                $form.find('.perfbase-warning-disabled').hide();
-            } else {
-                $form.find('.perfbase-profiling-options').hide();
-                $form.find('.perfbase-warning-disabled').show();
-            }
-        },
-
-        /**
-         * Validate API key format
-         */
-        validateApiKey: function() {
-            var apiKey = $(this).val().trim();
-            var $feedback = $(this).siblings('.perfbase-api-key-feedback');
-
-            if (!$feedback.length) {
-                $feedback = $('<div class="perfbase-api-key-feedback"></div>');
-                $(this).after($feedback);
-            }
-
-            if (apiKey === '') {
-                $feedback.html('<span style="color: #d63638;">API key is required</span>');
-            } else if (apiKey.length < 32) {
-                $feedback.html('<span style="color: #dba617;">API key seems too short</span>');
-            } else {
-                $feedback.html('<span style="color: #00a32a;">API key format looks valid</span>');
-            }
-        },
-
-        /**
-         * Validate sample rate
-         */
-        validateSampleRate: function() {
-            var rate = parseFloat($(this).val());
-            var $feedback = $(this).siblings('.perfbase-sample-rate-feedback');
-
-            if (!$feedback.length) {
-                $feedback = $('<div class="perfbase-sample-rate-feedback"></div>');
-                $(this).after($feedback);
-            }
-
-            if (isNaN(rate) || rate < 0 || rate > 1) {
-                $feedback.html('<span style="color: #d63638;">Sample rate must be between 0.0 and 1.0</span>');
-                $(this).css('border-color', '#d63638');
-            } else {
-                var percentage = Math.round(rate * 100);
-                $feedback.html('<span style="color: #00a32a;">Will profile ' + percentage + '% of requests</span>');
-                $(this).css('border-color', '');
-            }
-        },
-
-        /**
-         * Toggle advanced settings visibility
-         */
-        toggleAdvancedSettings: function(e) {
-            if (e) {
-                e.preventDefault();
-            }
-
-            var $advanced = $('.perfbase-advanced-settings');
-            var $toggle = $('.perfbase-advanced-toggle');
-
-            if ($advanced.is(':visible')) {
-                $advanced.hide();
-                $toggle.text('Show Advanced Settings');
-            } else {
-                $advanced.show();
-                $toggle.text('Hide Advanced Settings');
-            }
-        },
-
-        /**
-         * Update flags display
-         */
-        updateFlags: function() {
-            var selectedFlags = [];
-            var totalValue = 0;
-
-            $('input[name="perfbase_settings[flags][]"]:checked').each(function() {
-                var value = parseInt($(this).val());
-                var label = $(this).parent().text().trim();
-                selectedFlags.push(label);
-                totalValue += value;
-            });
-
-            var $summary = $('.perfbase-flags-summary');
-            if (!$summary.length) {
-                $summary = $('<div class="perfbase-flags-summary" style="margin-top: 10px; padding: 10px; background: #f0f0f1; border-radius: 4px;"></div>');
-                $('.perfbase-flags').append($summary);
-            }
-
-            if (selectedFlags.length > 0) {
-                $summary.html(
-                    '<strong>Selected features:</strong> ' + selectedFlags.join(', ') +
-                    '<br><small>Flag value: ' + totalValue + '</small>'
-                );
-            } else {
-                $summary.html('<em>No profiling features selected</em>');
-            }
-        },
-
-        /**
-         * Test API connection
-         */
-        testConnection: function(e) {
-            e.preventDefault();
-
-            var $button = $(this);
-            var originalText = $button.text();
-            var apiKey = $('input[name="perfbase_settings[api_key]"]').val();
-            var apiUrl = $('input[name="perfbase_settings[api_url]"]').val();
-
-            if (!apiKey) {
-                alert('Please enter an API key first.');
+            if (!this.$form.length) {
                 return;
             }
 
-            $button.text('Testing...').prop('disabled', true);
-
-            // This would typically make an AJAX request to test the connection
-            // For now, we'll just simulate it
-            setTimeout(function() {
-                // Simulate connection test
-                var success = Math.random() > 0.3; // 70% success rate for demo
-
-                if (success) {
-                    $button.text('✓ Connection successful').css('color', '#00a32a');
-                } else {
-                    $button.text('✗ Connection failed').css('color', '#d63638');
-                }
-
-                setTimeout(function() {
-                    $button.text(originalText).css('color', '').prop('disabled', false);
-                }, 3000);
-            }, 2000);
+            this.relocateSettingsNotice();
+            this.bindEvents();
+            this.initAdvancedOptions();
+            this.updateApiKey();
+            this.updateSampleRate();
+            this.updateFlagsSummary();
+            this.updateProfilingState();
         },
 
-        /**
-         * Validate all settings
-         */
-        validateSettings: function() {
-            // Run initial validation
-            $('input[name="perfbase_settings[api_key]"]').trigger('blur');
-            $('input[name="perfbase_settings[sample_rate]"]').trigger('input');
-            $('input[name="perfbase_settings[enabled]"]').trigger('change');
+        bindEvents: function() {
+            var self = this;
 
-            // Update flags summary
-            this.updateFlags();
+            this.$form.on('input change', 'input, textarea, select', function() {
+                self.markDirty();
+            });
+
+            this.$form.on('submit', function() {
+                self.$page.removeClass('has-unsaved-changes');
+                self.$form.find('.perfbase-save-button').prop('disabled', true);
+            });
+
+            this.$form
+                .find('input[name="perfbase_settings[api_key]"]')
+                .on('input blur', function() {
+                    self.updateApiKey();
+                });
+
+            this.$form
+                .find('input[name="perfbase_settings[sample_rate]"]')
+                .on('input', function() {
+                    self.updateSampleRate();
+                });
+
+            this.$form
+                .find('input[name="perfbase_settings[flags][]"]')
+                .on('change', function() {
+                    self.updateFlagsSummary();
+                });
+
+            this.$form
+                .find('input[name="perfbase_settings[enabled]"]')
+                .on('change', function() {
+                    self.updateProfilingState();
+                });
+
+            this.$form
+                .find('.perfbase-advanced-toggle')
+                .on('click', function() {
+                    self.toggleAdvancedOptions();
+                });
+        },
+
+        relocateSettingsNotice: function() {
+            var $slot = this.$page.find('.perfbase-notice-slot');
+            var $notices;
+
+            if (!$slot.length) {
+                return;
+            }
+
+            $notices = $('.notice.notice-success').filter(function() {
+                return $.trim($(this).text()).indexOf('Settings saved.') !== -1;
+            });
+
+            if (!$notices.length) {
+                return;
+            }
+
+            $notices.slice(1).remove();
+            $slot.empty().append($notices.first());
+        },
+
+        markDirty: function() {
+            this.$page.addClass('has-unsaved-changes');
+            this.$form.find('.perfbase-sticky-save').attr('aria-hidden', 'false');
+        },
+
+        initAdvancedOptions: function() {
+            var isOpen = false;
+
+            try {
+                isOpen = window.localStorage.getItem('perfbaseAdvancedOptionsOpen') === '1';
+            } catch (error) {
+                isOpen = false;
+            }
+
+            this.setAdvancedOptionsState(isOpen);
+        },
+
+        toggleAdvancedOptions: function() {
+            this.setAdvancedOptionsState(!this.$page.hasClass('is-showing-advanced'));
+        },
+
+        setAdvancedOptionsState: function(isOpen) {
+            var $toggle = this.$form.find('.perfbase-advanced-toggle');
+            var showLabel = $toggle.data('show-label') || 'Show advanced options';
+            var hideLabel = $toggle.data('hide-label') || 'Hide advanced options';
+
+            this.$page.toggleClass('is-showing-advanced', isOpen);
+            $toggle
+                .attr('aria-expanded', isOpen ? 'true' : 'false')
+                .text(isOpen ? hideLabel : showLabel);
+
+            try {
+                window.localStorage.setItem('perfbaseAdvancedOptionsOpen', isOpen ? '1' : '0');
+            } catch (error) {
+                return;
+            }
+        },
+
+        updateApiKey: function() {
+            var $input = this.$form.find('input[name="perfbase_settings[api_key]"]');
+            var $feedback = this.$form.find('.perfbase-api-key-feedback');
+            var apiKey = $.trim($input.val());
+            var hasStored = $input.data('has-stored') === 1 || $input.data('has-stored') === '1';
+            var validation;
+
+            if (!$feedback.length) {
+                return;
+            }
+
+            if (apiKey === '') {
+                if (hasStored) {
+                    $feedback
+                        .removeClass('is-error is-success')
+                        .addClass('is-muted')
+                        .text('Stored API key will be kept.');
+                    $input.removeAttr('aria-invalid');
+                    return;
+                }
+
+                $feedback
+                    .removeClass('is-success is-muted')
+                    .addClass('is-error')
+                    .text('API key is required to submit traces.');
+                $input.attr('aria-invalid', 'true');
+                return;
+            }
+
+            validation = this.validateJwtShape(apiKey);
+            if (!validation.valid) {
+                $feedback
+                    .removeClass('is-success is-muted')
+                    .addClass('is-error')
+                    .text(validation.message);
+                $input.attr('aria-invalid', 'true');
+                return;
+            }
+
+            $feedback
+                .removeClass('is-error is-muted')
+                .addClass('is-success')
+                .text('API key format looks valid.');
+            $input.removeAttr('aria-invalid');
+        },
+
+        validateJwtShape: function(value) {
+            var parts = value.split('.');
+
+            if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+                return {
+                    valid: false,
+                    message: 'API key must include three encoded sections.'
+                };
+            }
+
+            if (!this.isBase64Url(parts[0]) || !this.isBase64Url(parts[1]) || !this.isBase64Url(parts[2])) {
+                return {
+                    valid: false,
+                    message: 'API key contains unsupported characters.'
+                };
+            }
+
+            if (!this.decodeJsonSegment(parts[0]) || !this.decodeJsonSegment(parts[1])) {
+                return {
+                    valid: false,
+                    message: 'API key could not be decoded.'
+                };
+            }
+
+            return { valid: true };
+        },
+
+        isBase64Url: function(segment) {
+            return /^[A-Za-z0-9_-]+$/.test(segment);
+        },
+
+        decodeJsonSegment: function(segment) {
+            var normalized = segment.replace(/-/g, '+').replace(/_/g, '/');
+            var padding = normalized.length % 4;
+            var decoded;
+
+            if (padding) {
+                normalized += new Array(5 - padding).join('=');
+            }
+
+            try {
+                decoded = window.atob(normalized);
+                return JSON.parse(decoded);
+            } catch (error) {
+                return null;
+            }
+        },
+
+        updateSampleRate: function() {
+            var $input = this.$form.find('input[name="perfbase_settings[sample_rate]"]');
+            var $feedback = this.$form.find('.perfbase-sample-rate-feedback');
+            var rate = parseFloat($input.val());
+
+            if (!$feedback.length) {
+                return;
+            }
+
+            if (isNaN(rate) || rate < 0 || rate > 1) {
+                $feedback
+                    .addClass('is-error')
+                    .text('Sample rate must be between 0.0 and 1.0.');
+                $input.attr('aria-invalid', 'true');
+                return;
+            }
+
+            $feedback
+                .removeClass('is-error')
+                .text('Will profile ' + Math.round(rate * 100) + '% of requests.');
+            $input.removeAttr('aria-invalid');
+        },
+
+        updateFlagsSummary: function() {
+            var checked = this.$form.find('input[name="perfbase_settings[flags][]"]:checked').length;
+            var total = this.$form.find('input[name="perfbase_settings[flags][]"]').length;
+            var $summary = this.$form.find('.perfbase-flags-count');
+
+            if (!$summary.length) {
+                return;
+            }
+
+            $summary.text(checked + ' of ' + total + ' capabilities enabled');
+        },
+
+        updateProfilingState: function() {
+            var enabled = this.$form.find('input[name="perfbase_settings[enabled]"]').is(':checked');
+            this.$form.find('.perfbase-profiling-card').toggleClass('is-muted', !enabled);
         }
     };
 
-    // Make PerfbaseAdmin globally available
-    window.PerfbaseAdmin = PerfbaseAdmin;
+    $(function() {
+        PerfbaseAdmin.init();
+    });
 
+    window.PerfbaseAdmin = PerfbaseAdmin;
 })(jQuery);
