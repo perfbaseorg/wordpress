@@ -5,7 +5,6 @@ namespace Perfbase\WordPress\Tests\Unit\Plugin;
 use Brain\Monkey\Functions;
 use Mockery;
 use Perfbase\SDK\FeatureFlags;
-use Perfbase\SDK\Perfbase as PerfbaseClient;
 use Perfbase\WordPress\PerfbaseAdmin;
 use Perfbase\WordPress\PerfbasePlugin;
 use Perfbase\WordPress\Helpers\ConfigManager;
@@ -697,33 +696,18 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('Profiling Status', $output);
     }
 
-    public function testRenderSettingsPageShowsExtensionVersion()
+    public function testFormatExtensionStatusShowsExtensionVersion()
     {
-        $mockPerfbase = Mockery::mock(PerfbaseClient::class);
-        $mockPerfbase->shouldReceive('isExtensionAvailable')
-            ->andReturn(true);
-
-        $mockPlugin = Mockery::mock(PerfbasePlugin::class);
-        $mockPlugin->shouldReceive('get_config')
-            ->andReturn(TestData::getValidConfig());
-        $mockPlugin->shouldReceive('get_perfbase')
-            ->andReturn($mockPerfbase);
-
-        Functions\when('current_user_can')->justReturn(true);
-        Functions\when('settings_fields')->justReturn();
-        Functions\when('perfbase_version')->justReturn('1.0.121');
-        Functions\when('get_bloginfo')->alias(function ($field) {
-            return $field === 'version' ? '6.9.4' : '';
+        Functions\when('__')->alias(function ($text) {
+            return $text;
         });
 
-        $admin = new PerfbaseAdmin($mockPlugin);
+        $method = new \ReflectionMethod(PerfbaseAdmin::class, 'format_extension_status');
+        $method->setAccessible(true);
 
-        ob_start();
-        $admin->render_settings_page();
-        $output = ob_get_clean();
-
-        $this->assertStringContainsString('Available (v1.0.121)', $output);
-        $this->assertStringNotContainsString('Extension missing', $output);
+        $this->assertSame('Available (v1.0.121)', $method->invoke($this->admin, true, '1.0.121'));
+        $this->assertSame('Not Available', $method->invoke($this->admin, true, null));
+        $this->assertSame('Not Available', $method->invoke($this->admin, false, '1.0.121'));
     }
 
     public function testSanitizeSettingsMigratesLegacyExcludedPaths()
