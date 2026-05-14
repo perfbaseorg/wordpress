@@ -1,5 +1,5 @@
 === Perfbase ===
-Contributors: benpoulson
+Contributors: perfbaseorg
 Tags: performance, profiling, apm, monitoring, woocommerce
 Requires at least: 5.0
 Tested up to: 6.9
