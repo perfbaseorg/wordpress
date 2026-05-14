@@ -703,7 +703,9 @@ class PerfbaseAdminTest extends BaseWordPressTest
         });
 
         $method = new \ReflectionMethod(PerfbaseAdmin::class, 'format_extension_status');
-        $method->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $method->setAccessible(true);
+        }
 
         $this->assertSame('Available (v1.0.121)', $method->invoke($this->admin, true, '1.0.121'));
         $this->assertSame('Not Available', $method->invoke($this->admin, true, null));

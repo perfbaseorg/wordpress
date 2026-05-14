@@ -256,7 +256,9 @@ abstract class BaseWordPressTest extends TestCase
     {
         $reflection = new ReflectionClass($object);
         $property = $reflection->getProperty($propertyName);
-        $property->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $property->setAccessible(true);
+        }
         return $property->getValue($object);
     }
 
@@ -272,7 +274,9 @@ abstract class BaseWordPressTest extends TestCase
     {
         $reflection = new ReflectionClass($object);
         $property = $reflection->getProperty($propertyName);
-        $property->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $property->setAccessible(true);
+        }
         $property->setValue($object, $value);
     }
 
@@ -289,7 +293,9 @@ abstract class BaseWordPressTest extends TestCase
     {
         $reflection = new ReflectionClass($object);
         $method = $reflection->getMethod($methodName);
-        $method->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $method->setAccessible(true);
+        }
         return $method->invokeArgs($object, $parameters);
     }
 

@@ -297,7 +297,9 @@ class AbstractWordPressProfilerTest extends BaseWordPressTest
         // Check attributes were accumulated (they'll be set on SDK during stopProfiling)
         $reflection = new \ReflectionClass($profiler);
         $prop = $reflection->getProperty('attributes');
-        $prop->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $prop->setAccessible(true);
+        }
         $attrs = $prop->getValue($profiler);
 
         $this->assertArrayHasKey('hostname', $attrs);

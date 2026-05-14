@@ -760,7 +760,9 @@ class PerfbasePluginTest extends BaseWordPressTest
 
         $reflection = new \ReflectionClass($this->plugin);
         $method = $reflection->getMethod('register_hooks');
-        $method->setAccessible(true);
+        if (PHP_VERSION_ID < 80100) {
+            $method->setAccessible(true);
+        }
         $method->invoke($this->plugin);
 
         $this->assertNotContains('query', $filtersRegistered);
