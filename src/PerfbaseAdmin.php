@@ -355,6 +355,8 @@ class PerfbaseAdmin {
                     </div>
                 </div>
 
+                <hr class="wp-header-end" />
+
                 <div class="perfbase-notice-slot" aria-live="polite"></div>
 
                 <div class="perfbase-summary" aria-label="<?php echo esc_attr(__('Perfbase status summary', 'perfbase')); ?>">
