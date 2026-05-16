@@ -353,32 +353,23 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('Settings', $result[0]);
     }
 
-    public function testRegisterPrivacyPolicyContentDisclosesPerfbaseSubmission()
+    public function testRegisterPrivacyPolicyContentRegistersSuggestedContent()
     {
-        Functions\when('esc_url')->returnArg();
-        Functions\when('wpautop')->alias(function ($text) {
-            return '<p>' . $text . '</p>';
-        });
-        Functions\when('wp_kses_post')->returnArg();
+        Functions\expect('esc_url')
+            ->once()
+            ->with('https://ingress.perfbase.cloud')
+            ->andReturn('https://ingress.perfbase.cloud');
+        Functions\expect('wpautop')
+            ->once()
+            ->with(Mockery::type('string'))
+            ->andReturn('<p>privacy copy</p>');
+        Functions\expect('wp_kses_post')
+            ->once()
+            ->with('<p>privacy copy</p>')
+            ->andReturn('<p>safe privacy copy</p>');
         Functions\expect('wp_add_privacy_policy_content')
             ->once()
-            ->with(Mockery::any(), Mockery::on(function ($content) {
-                $this->assertStringContainsString('external application performance monitoring service', $content);
-                $this->assertStringContainsString('https://ingress.perfbase.cloud', $content);
-                $this->assertStringContainsString('profiling traces', $content);
-                $this->assertStringContainsString('URL path without the query string', $content);
-                $this->assertStringContainsString('user IP address', $content);
-                $this->assertStringContainsString('user agent', $content);
-                $this->assertStringContainsString('user ID when a visitor is logged in', $content);
-                $this->assertStringContainsString('hostname', $content);
-                $this->assertStringContainsString('environment', $content);
-                $this->assertStringContainsString('application version', $content);
-                $this->assertStringContainsString('HTTP status code', $content);
-                $this->assertStringContainsString('WordPress request context metadata', $content);
-                $this->assertStringContainsString('API key is missing or profiling is disabled', $content);
-
-                return true;
-            }));
+            ->with('Perfbase', '<p>safe privacy copy</p>');
 
         $this->admin->register_privacy_policy_content();
     }

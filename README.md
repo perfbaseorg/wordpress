@@ -60,13 +60,75 @@ For manual source installation:
 
 ### Install the Perfbase extension
 
-The plugin depends on the native Perfbase PHP extension. Install it with:
+The plugin depends on the native Perfbase PHP extension. Installing that extension requires shell/server access and permission to copy a native extension into PHP's extension directory and add an ini file. Perfbase for WordPress is intended for advanced or server-managed WordPress environments. Many shared hosting and restricted managed WordPress environments do not support custom PHP extensions; in those environments the plugin can be installed, but profiling will not run until the extension is available.
+
+Automated installer for supported server environments:
 
 ```bash
 bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
 ```
 
-Restart PHP-FPM, Apache, Nginx Unit, or any long-lived PHP worker after installing the extension.
+The installer performs the same download, checksum, copy, ini-file, and verification steps automatically.
+
+Manual extension installation with `wget`:
+
+Find the PHP major/minor version and CPU architecture:
+
+```bash
+php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION.PHP_EOL;'
+uname -m
+```
+
+Use `amd64` for `x86_64`, and `arm64` for `aarch64` or Apple Silicon. Choose the URL pattern for your server:
+
+Debian/Ubuntu and most glibc Linux distributions:
+
+```bash
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-linux-amd64-gnu-release.so
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-linux-amd64-gnu-release.so.sha256sum.txt
+sha256sum -c perfbase-8.3-linux-amd64-gnu-release.so.sha256sum.txt
+```
+
+Alpine Linux:
+
+```bash
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-linux-amd64-musl-release.so
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-linux-amd64-musl-release.so.sha256sum.txt
+sha256sum -c perfbase-8.3-linux-amd64-musl-release.so.sha256sum.txt
+```
+
+macOS:
+
+```bash
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-darwin-arm64-release.dylib
+wget https://cdn.perfbase.com/extension/latest/perfbase-8.3-darwin-arm64-release.dylib.sha256sum.txt
+sha256sum -c perfbase-8.3-darwin-arm64-release.dylib.sha256sum.txt
+```
+
+Replace `8.3` with your PHP major/minor version and replace `amd64` with `arm64` when using ARM64 Linux.
+
+Find PHP's extension directory and loaded ini scan directories:
+
+```bash
+php -i | grep '^extension_dir'
+php --ini
+```
+
+Copy the extension binary into PHP's extension directory, then create `perfbase.ini` in one of the loaded ini scan directories:
+
+```ini
+extension=perfbase.ext
+```
+
+Replace `perfbase.ext` with the downloaded filename, such as `perfbase.so` or `perfbase.dylib`.
+
+Restart PHP-FPM, Apache, Nginx Unit, or any long-lived PHP worker after installing the extension, then verify it:
+
+```bash
+php -m | grep perfbase
+```
+
+For a specific pinned build instead of the mutable latest build, replace `/extension/latest/` with a versioned path such as `/extension/v123/`.
 
 ## Quick start
 
@@ -241,10 +303,26 @@ The plugin also adds context through WordPress hooks such as:
 
 Cache profiling itself is handled by the native Perfbase extension via feature flags rather than by WordPress cache hooks.
 
-For safety and lower cardinality:
+Perfbase can send:
 
-- outbound HTTP attributes are stored as sanitized `scheme://host/path` values without query strings or fragments
-- database visibility is limited to aggregate shutdown-time stats such as total query count, slow query count, and total query time
+- function call trees, function names, source file paths and line numbers, timing, CPU, memory, and host resource metrics
+- host operating system, kernel, hostname, CPU architecture, CPU details, disk capacity details, memory usage, CPU usage, disk I/O, and network I/O samples
+- capped process-list snapshots when enabled, containing process ID, executable basename, OS user, CPU usage, memory usage, and process runtime, without command-line arguments
+- additional native trace metadata such as normalized SQL query text, database DSN/host/database/username/port metadata, MongoDB or Elasticsearch query/filter payload summaries, Redis or Memcached keys and fields, HTTP URL or URI metadata that may include query strings depending on the PHP API or HTTP library used, HTTP method/status/timing/byte-count metadata, file paths and file operation metadata, mail recipient and subject metadata, shell/process command strings, AWS operation names, OPcache and JIT statistics, PHP error or exception samples, compiled file paths, magic method counts, and truncated function argument values when argument capture is separately configured. These fields depend on enabled extension features, loaded PHP libraries, and which code paths run during the trace
+- WordPress request metadata such as action name, HTTP method, request URL without query string, HTTP status code, user IP address, user agent, logged-in user ID when available, hostname, environment, application version, PHP version, WordPress version, and Perfbase plugin version
+- WordPress context metadata such as AJAX action, REST route, admin page, post/page identifiers, post type/status, taxonomy context, template and theme information, conditional page type flags, plugin lifecycle context, and WooCommerce page, cart, product, or order context when available
+- operational summaries such as memory usage, database query count and timing summaries when available, and sanitized outbound HTTP request metadata when HTTP tracking is enabled
+
+Perfbase does not collect:
+
+- source code
+- request bodies, full POST payloads (`$_POST`), arbitrary form fields, or uploaded file contents
+- cookie values (`$_COOKIE`) or PHP session data (`$_SESSION`)
+- authorization header values
+- passwords, API keys, nonces, or session IDs from WordPress request, cookie, or session data
+- command-line arguments for process-list snapshots
+
+Feature flags control the extra native trace metadata listed under "Perfbase can send", including outbound HTTP URLs or URIs with query strings for some HTTP libraries and truncated function argument values if argument capture is separately configured. Review enabled Perfbase extension feature flags before profiling sensitive workloads, especially flags that capture arguments, errors, exceptions, database/cache/HTTP/file metadata, mail metadata, process metadata, OPcache metadata, or host resource metadata.
 
 ## Request metadata
 
@@ -273,7 +351,20 @@ The plugin keeps action names low-cardinality and avoids leaking sensitive query
 - `wordpress.admin_page`
 - template, theme, post, taxonomy, and conditional-tag attributes when available
 
-`http_url` is stored without the query string. Important WordPress query parameters are broken out into dedicated attributes instead.
+`http_url` for the inbound WordPress request is stored without the query string. Important WordPress query parameters are broken out into dedicated attributes instead. Native HTTP metadata may still include full outbound URLs or URIs with query strings depending on enabled extension features and the HTTP library used.
+
+### Data Perfbase does not collect
+
+Perfbase does not collect:
+
+- source code
+- request bodies, full POST payloads (`$_POST`), arbitrary form fields, or uploaded file contents
+- cookie values (`$_COOKIE`) or PHP session data (`$_SESSION`)
+- authorization header values
+- passwords, API keys, nonces, or session IDs from WordPress request, cookie, or session data
+- command-line arguments for process-list snapshots
+
+Database metadata added by the WordPress plugin is limited to aggregate query counts and timing information when available. Native HTTP metadata can include outbound URLs or URIs with query strings. The native profiler may capture additional context depending on enabled Perfbase extension feature flags and application code.
 
 ## Example production setup
 
@@ -305,7 +396,7 @@ php -m | grep perfbase
 php --ini
 ```
 
-If needed, reinstall it:
+If the extension is missing, repeat the manual extension installation steps above or run the automated installer on a supported server:
 
 ```bash
 bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"

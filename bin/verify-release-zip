@@ -60,8 +60,9 @@ unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 PLUGIN_DIR="$TMP_DIR/$PLUGIN_SLUG"
 PLUGIN_FILE="$PLUGIN_DIR/perfbase.php"
 README_FILE="$PLUGIN_DIR/readme.txt"
+ADMIN_FILE="$PLUGIN_DIR/src/PerfbaseAdmin.php"
 
-for required_path in "$PLUGIN_FILE" "$README_FILE" "$PLUGIN_DIR/uninstall.php" "$PLUGIN_DIR/composer.json" "$PLUGIN_DIR/vendor/autoload.php" "$PLUGIN_DIR/LICENSE.txt"; do
+for required_path in "$PLUGIN_FILE" "$README_FILE" "$ADMIN_FILE" "$PLUGIN_DIR/uninstall.php" "$PLUGIN_DIR/composer.json" "$PLUGIN_DIR/vendor/autoload.php" "$PLUGIN_DIR/LICENSE.txt"; do
     if [[ ! -f "$required_path" ]]; then
         echo "Expected packaged file missing: ${required_path#$TMP_DIR/}" >&2
         exit 1
@@ -76,12 +77,13 @@ for forbidden_path in composer.lock tests .github AGENTS.md CLAUDE.md phpunit.xm
 done
 
 php -r '
-    [$version, $pluginFile, $readmeFile] = array_slice($argv, 1);
+    [$version, $pluginFile, $readmeFile, $adminFile] = array_slice($argv, 1);
 
     $plugin = file_get_contents($pluginFile);
     $readme = file_get_contents($readmeFile);
+    $admin = file_get_contents($adminFile);
 
-    if ($plugin === false || $readme === false) {
+    if ($plugin === false || $readme === false || $admin === false) {
         fwrite(STDERR, "Unable to read packaged metadata\n");
         exit(1);
     }
@@ -97,6 +99,52 @@ php -r '
     $expect((bool) preg_match("/^define\('\''PERFBASE_PLUGIN_VERSION'\'',\s*'\''" . preg_quote($version, "/") . "'\''\);$/m", $plugin), "Plugin constant version does not match {$version}");
     $expect((bool) preg_match("/^Stable tag:\s*" . preg_quote($version, "/") . "$/m", $readme), "Readme stable tag does not match {$version}");
     $expect((bool) preg_match("/^= " . preg_quote($version, "/") . " =$/m", $readme), "Readme changelog or upgrade notice does not include {$version}");
-' "$EXPECTED_VERSION" "$PLUGIN_FILE" "$README_FILE"
+    $expect(strpos($readme, "== External Services ==") !== false, "Readme is missing External Services section");
+    $expect(strpos($readme, "Perfbase APM platform") !== false, "Readme is missing service name disclosure");
+    $expect(strpos($readme, "https://perfbase.com/privacy/") !== false, "Readme is missing Perfbase privacy policy link");
+    $expect(strpos($readme, "https://perfbase.com/terms/") !== false, "Readme is missing Perfbase terms link");
+    $expect(strpos($readme, "user IP address") !== false, "Readme is missing user IP disclosure");
+    $expect(strpos($readme, "user agent") !== false, "Readme is missing user agent disclosure");
+    $expect(strpos($readme, "normalized SQL query text") !== false, "Readme is missing SQL metadata disclosure");
+    $expect(strpos($readme, "Redis or Memcached keys") !== false, "Readme is missing cache key disclosure");
+    $expect(strpos($readme, "HTTP URL or URI metadata that may include query strings") !== false, "Readme is missing native HTTP URL query disclosure");
+    $expect(strpos($readme, "mail recipient and subject") !== false, "Readme is missing mail metadata disclosure");
+    $expect(strpos($readme, "shell/process command strings") !== false, "Readme is missing process command disclosure");
+    $expect(strpos($readme, "OPcache and JIT statistics") !== false, "Readme is missing OPcache metadata disclosure");
+    $expect(stripos($readme, "process-list tracking") !== false, "Readme is missing process-list disclosure");
+    $expect(strpos($readme, "host resource") !== false, "Readme is missing host resource disclosure");
+    $expect(strpos($readme, "Perfbase can send:") !== false, "Readme is missing Perfbase can send disclosure");
+    $expect(strpos($readme, "Perfbase does not collect:") !== false, "Readme is missing Perfbase does not collect disclosure");
+    $expect(stripos($readme, "request bodies") !== false, "Readme is missing request body metadata disclosure");
+    $expect(stripos($readme, "POST payloads") !== false, "Readme is missing POST data metadata disclosure");
+    $expect(stripos($readme, "arbitrary form fields") !== false, "Readme is missing form field metadata disclosure");
+    $expect(stripos($readme, "source code") !== false, "Readme is missing source code exclusion disclosure");
+    $expect(stripos($readme, "cookie values") !== false, "Readme is missing cookie metadata disclosure");
+    $expect(stripos($readme, "PHP session data") !== false, "Readme is missing session metadata disclosure");
+    $expect(stripos($readme, "authorization header values") !== false, "Readme is missing authorization header metadata disclosure");
+    $expect(strpos($readme, "full query strings, passwords") === false, "Readme should not claim full query strings are excluded from native traces");
+    $expect(strpos($readme, "Feature flags control the extra native trace metadata") !== false, "Readme is missing native feature flag metadata disclosure");
+    $expect(strpos($readme, "enabled Perfbase extension feature flags") !== false, "Readme is missing feature flag caveat");
+    $expect(strpos($readme, "shell/server access is required") !== false, "Readme is missing server access installation warning");
+    $expect(strpos($readme, "shared hosting") !== false, "Readme is missing shared hosting installation warning");
+    $expect(strpos($readme, "php -r") !== false, "Readme is missing manual PHP version check");
+    $expect(strpos($readme, "php -i | grep") !== false, "Readme is missing manual extension_dir check");
+    $expect(strpos($readme, "php --ini") !== false, "Readme is missing manual ini scan check");
+    $expect(strpos($readme, "uname -m") !== false, "Readme is missing architecture detection guidance");
+    $expect(strpos($readme, "Debian/Ubuntu") !== false, "Readme is missing Debian/Ubuntu URL guidance");
+    $expect(strpos($readme, "Alpine Linux") !== false, "Readme is missing Alpine URL guidance");
+    $expect(strpos($readme, "macOS") !== false, "Readme is missing macOS URL guidance");
+    $expect(strpos($readme, "linux-amd64-gnu-release.so") !== false, "Readme is missing glibc Linux URL pattern");
+    $expect(strpos($readme, "linux-amd64-musl-release.so") !== false, "Readme is missing Alpine musl URL pattern");
+    $expect(strpos($readme, "darwin-arm64-release.dylib") !== false, "Readme is missing macOS URL pattern");
+    $expect(strpos($readme, "sha256sum -c") !== false, "Readme is missing manual checksum verification");
+    $expect(strpos($readme, "/extension/v123/") !== false, "Readme is missing pinned version path example");
+    $expect(strpos($readme, "cdn.perfbase.com") !== false, "Readme is missing CDN installer disclosure");
+    $expect(strpos($readme, "bash -c \"\$(curl") !== false, "Readme is missing automated installer command");
+    $expect(strpos($readme, "Automated installer") < strpos($readme, "Manual extension installation"), "Readme should show automated installer before manual instructions");
+    $expect(strpos($admin, "normalized SQL query text") !== false, "Admin privacy text is missing SQL metadata disclosure");
+    $expect(strpos($admin, "HTTP URL or URI metadata that may include query strings") !== false, "Admin privacy text is missing native HTTP URL query disclosure");
+    $expect(strpos($admin, "Perfbase does not collect source code") !== false, "Admin privacy text is missing source code exclusion disclosure");
+' "$EXPECTED_VERSION" "$PLUGIN_FILE" "$README_FILE" "$ADMIN_FILE"
 
 echo "Verified $ZIP_PATH"
