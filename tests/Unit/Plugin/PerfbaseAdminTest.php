@@ -355,6 +355,9 @@ class PerfbaseAdminTest extends BaseWordPressTest
 
     public function testRegisterPrivacyPolicyContentRegistersSuggestedContent()
     {
+        $registeredTitle = null;
+        $registeredContent = null;
+
         Functions\expect('esc_url')
             ->once()
             ->with('https://ingress.perfbase.cloud')
@@ -369,9 +372,21 @@ class PerfbaseAdminTest extends BaseWordPressTest
             ->andReturn('<p>safe privacy copy</p>');
         Functions\expect('wp_add_privacy_policy_content')
             ->once()
-            ->with('Perfbase', '<p>safe privacy copy</p>');
+            ->with(
+                Mockery::on(function ($title) use (&$registeredTitle) {
+                    $registeredTitle = $title;
+                    return $title === 'Perfbase';
+                }),
+                Mockery::on(function ($content) use (&$registeredContent) {
+                    $registeredContent = $content;
+                    return $content === '<p>safe privacy copy</p>';
+                })
+            );
 
         $this->admin->register_privacy_policy_content();
+
+        $this->assertSame('Perfbase', $registeredTitle);
+        $this->assertSame('<p>safe privacy copy</p>', $registeredContent);
     }
 
     public function testEnqueueAdminScriptsOnlyOnSettingsPage()
