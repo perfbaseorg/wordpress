@@ -1,8 +1,9 @@
 === Perfbase ===
 Contributors: perfbaseorg
 Tags: performance, profiling, apm, monitoring, woocommerce
-Requires at least: 7.4
-Tested up to: 8.5
+Requires at least: 5.3
+Tested up to: 7.0
+Requires PHP: 7.4
 Stable tag: trunk
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html

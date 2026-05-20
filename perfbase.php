@@ -4,7 +4,8 @@
  * Plugin URI: https://perfbase.com/integrations/wordpress/
  * Description: WordPress integration for the Perfbase APM platform. Provides comprehensive performance monitoring and profiling for WordPress applications.
  * Version: 0.0.0-dev
- * Requires at least: 5.0
+ * Requires at least: 5.3
+ * Tested up to: 7.0
  * Requires PHP: 7.4
  * Author: Perfbase Team
  * Author URI: https://perfbase.com
