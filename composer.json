@@ -22,10 +22,10 @@
     }
   ],
   "require": {
-    "php": ">=7.4 <8.5",
+    "php": ">=7.4 <8.7",
     "ext-curl": "*",
     "ext-json": "*",
-    "perfbase/php-sdk": "^1.0"
+    "perfbase/php-sdk": "^1.9"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",

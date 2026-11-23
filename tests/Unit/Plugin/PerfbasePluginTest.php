@@ -788,6 +788,41 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertFalse($result);
     }
 
+    public function testOnHttpRequestRecordsUnderExtensionDefaultFlags()
+    {
+        // 0 and opt-in-only masks mean "the extension's default set", which includes HTTP.
+        foreach ([FeatureFlags::AllFlags, FeatureFlags::TrackCpuTime] as $flags) {
+            $config = TestData::getValidConfig();
+            $config['flags'] = $flags;
+            $mock_perfbase = MockFactory::createMockPerfbase();
+            $mock_perfbase
+                ->shouldReceive('setAttribute')
+                ->with('http.external_request', 'https://api.example.com/data')
+                ->once();
+
+            $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+            $this->setPrivateProperty($this->plugin, 'config', $config);
+
+            $this->plugin->on_http_request(false, [], 'https://api.example.com/data');
+        }
+
+        $this->assertTrue(true);
+    }
+
+    public function testOnHttpRequestSkipsWhenExactMaskExcludesHttp()
+    {
+        $config = TestData::getValidConfig();
+        $config['flags'] = FeatureFlags::TrackPdo;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+        $mock_perfbase->shouldNotReceive('setAttribute');
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_http_request(false, [], 'https://api.example.com/data');
+        $this->assertTrue(true);
+    }
+
     public function testOnHttpRequestStripsQueryStringAndFragment()
     {
         $config = TestData::getValidConfig();

@@ -14,7 +14,7 @@
   <a href="https://github.com/perfbaseorg/wordpress/blob/main/LICENSE.txt"><img src="https://img.shields.io/packagist/l/perfbase/wordpress" alt="License"></a>
   <a href="https://github.com/perfbaseorg/wordpress/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/perfbaseorg/wordpress/tests.yml?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/php-7.4%2B-blue" alt="PHP Version">
-  <img src="https://img.shields.io/badge/wordpress-5.0%2B-blue" alt="WordPress Version">
+  <img src="https://img.shields.io/badge/wordpress-5.3%2B-blue" alt="WordPress Version">
 </p>
 
 This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/packages/perfbase/php-sdk). It detects the current WordPress execution context, starts and stops trace spans through the shared SDK, and adds WordPress-specific metadata along the way.
@@ -30,8 +30,8 @@ This plugin is a thin adapter over [`perfbase/php-sdk`](https://packagist.org/pa
 
 ## Requirements
 
-- PHP `>=7.4 <8.5`
-- WordPress `5.0+`
+- PHP `>=7.4 <8.7`
+- WordPress `5.3+` (tested up to 7.1)
 - `ext-curl`
 - `ext-json`
 - `ext-perfbase`
@@ -147,7 +147,7 @@ define('PERFBASE_SAMPLE_RATE', 0.1);
 define('PERFBASE_API_URL', 'https://ingress.perfbase.cloud');
 define('PERFBASE_TIMEOUT', 10);
 define('PERFBASE_PROXY', '');
-define('PERFBASE_FLAGS', \Perfbase\SDK\FeatureFlags::DefaultFlags);
+// define('PERFBASE_FLAGS', 51200); // optional integer mask (see Feature flags); omit for the defaults
 define('PERFBASE_PROFILE_HTTP_STATUS_CODES', '200-299,500-599');
 define('PERFBASE_DEBUG', false);
 define('PERFBASE_LOG_ERRORS', true);
@@ -252,29 +252,17 @@ The HTTP status code setting accepts comma-separated values or ranges such as `2
 
 The plugin passes SDK feature flags straight through to the Perfbase extension.
 
-Common flags exposed in the admin UI include:
+The admin UI offers every flag the extension honours: `UsePreciseClock`, `TrackCpuTime`, `TrackMemoryAllocation`, `TrackOpcache`, `TrackExceptions`, `TrackErrors`, `TrackMagicMethods`, `TrackPdo`, `TrackMongodb`, `TrackElasticsearch`, `TrackCaches`, `TrackHttp`, `TrackMail`, `TrackFileCompilation`, `TrackFileOperations`, `TrackStreams` (PHP 8.6+), `TrackProc` and `TrackProcessList`. See the [PHP SDK README](https://github.com/perfbaseorg/php-sdk#available-feature-flags) for details.
 
-- `UseCoarseClock`
-- `TrackCpuTime`
-- `TrackPdo`
-- `TrackHttp`
-- `TrackCaches`
-- `TrackMongodb`
-- `TrackElasticsearch`
-- `TrackQueues`
-- `TrackFileOperations`
+- The default is the SDK's `DefaultFlags`: everything except `TrackCpuTime` and `TrackMemoryAllocation`, the two most expensive.
+- `0` (nothing checked) uses the extension default: everything except `UsePreciseClock` and `TrackCpuTime`.
+- Any other combination enables exactly the flags selected.
 
-Programmatic configuration can also use the broader flag set from `perfbase/php-sdk`.
-
-Example:
+`wp-config.php` runs before the plugin's autoloader, so `PERFBASE_FLAGS` must be an integer there, not a `FeatureFlags::` expression:
 
 ```php
-define(
-    'PERFBASE_FLAGS',
-    \Perfbase\SDK\FeatureFlags::UseCoarseClock |
-    \Perfbase\SDK\FeatureFlags::TrackCpuTime |
-    \Perfbase\SDK\FeatureFlags::TrackPdo
-);
+// TrackPdo (1 << 11) | TrackCaches (1 << 14) | TrackHttp (1 << 15)
+define('PERFBASE_FLAGS', 51200);
 ```
 
 ## How it works
@@ -308,8 +296,8 @@ Perfbase can send:
 - function call trees, function names, source file paths and line numbers, timing, CPU, memory, and host resource metrics
 - host operating system, kernel, hostname, CPU architecture, CPU details, disk capacity details, memory usage, CPU usage, disk I/O, and network I/O samples
 - capped process-list snapshots when enabled, containing process ID, executable basename, OS user, CPU usage, memory usage, and process runtime, without command-line arguments
-- additional native trace metadata such as normalized SQL query text, database DSN/host/database/username/port metadata, MongoDB or Elasticsearch query/filter payload summaries, Redis or Memcached keys and fields, HTTP URL or URI metadata that may include query strings depending on the PHP API or HTTP library used, HTTP method/status/timing/byte-count metadata, file paths and file operation metadata, mail recipient and subject metadata, shell/process command strings, AWS operation names, OPcache and JIT statistics, PHP error or exception samples, compiled file paths, magic method counts, and truncated function argument values when argument capture is separately configured. These fields depend on enabled extension features, loaded PHP libraries, and which code paths run during the trace
-- WordPress request metadata such as action name, HTTP method, request URL without query string, HTTP status code, user IP address, user agent, logged-in user ID when available, hostname, environment, application version, PHP version, WordPress version, and Perfbase plugin version
+- additional native trace metadata: normalized SQL with literal values replaced by placeholders, and query type; database DSN driver/host/port/database name with credentials and other parameters masked; MongoDB or Elasticsearch query/filter structure with every value masked; Redis or Memcached keys and fields; outbound HTTP URLs with user credentials, query strings and fragments removed; HTTP method/status/timing/byte-count metadata; file paths (credentials and query strings removed) and file operation metadata; mail recipient domain and subject length; the program name and command length of shell/process calls; AWS operation names; OPcache statistics; PHP error or exception samples with stack traces removed and credential-like values masked; compiled file paths; and magic method counts. Function argument values are not captured. These fields depend on enabled extension features, loaded PHP libraries, and which code paths run during the trace
+- WordPress request metadata such as action name, HTTP method, request URL including its query string, with the values of credential-looking parameters (such as tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, and password-reset keys and logins) replaced by `REDACTED`, HTTP status code, user IP address, user agent, logged-in user ID when available, hostname, environment, application version, PHP version, WordPress version, and Perfbase plugin version
 - WordPress context metadata such as AJAX action, REST route, admin page, post/page identifiers, post type/status, taxonomy context, template and theme information, conditional page type flags, plugin lifecycle context, and WooCommerce page, cart, product, or order context when available
 - operational summaries such as memory usage, database query count and timing summaries when available, and sanitized outbound HTTP request metadata when HTTP tracking is enabled
 
@@ -322,11 +310,11 @@ Perfbase does not collect:
 - passwords, API keys, nonces, or session IDs from WordPress request, cookie, or session data
 - command-line arguments for process-list snapshots
 
-Feature flags control the extra native trace metadata listed under "Perfbase can send", including outbound HTTP URLs or URIs with query strings for some HTTP libraries and truncated function argument values if argument capture is separately configured. Review enabled Perfbase extension feature flags before profiling sensitive workloads, especially flags that capture arguments, errors, exceptions, database/cache/HTTP/file metadata, mail metadata, process metadata, OPcache metadata, or host resource metadata.
+Feature flags control which of the extra native trace metadata listed under "Perfbase can send" is collected. Review enabled Perfbase extension feature flags before profiling sensitive workloads, especially flags that capture errors, exceptions, database/cache/HTTP/file metadata, mail metadata, process metadata, OPcache metadata, or host resource metadata.
 
 ## Request metadata
 
-The plugin keeps action names low-cardinality and avoids leaking sensitive query parameters.
+The plugin keeps action names low-cardinality and redacts sensitive query parameters.
 
 ### Core trace attributes
 
@@ -351,7 +339,7 @@ The plugin keeps action names low-cardinality and avoids leaking sensitive query
 - `wordpress.admin_page`
 - template, theme, post, taxonomy, and conditional-tag attributes when available
 
-`http_url` for the inbound WordPress request is stored without the query string. Important WordPress query parameters are broken out into dedicated attributes instead. Native HTTP metadata may still include full outbound URLs or URIs with query strings depending on enabled extension features and the HTTP library used.
+`http_url` for the inbound WordPress request keeps its query string, because custom endpoints are often identified by it (`?method=example`). Values of credential-looking parameters (`token`, `password`, `api_key`, `signature`, `_wpnonce`, session IDs, `email`, and the password-reset `key` / `login`) are replaced with `REDACTED` by `Perfbase\SDK\Utils\UrlSanitizer`. `action` never includes the query string, and important WordPress query parameters are also broken out into dedicated attributes. Outbound URLs recorded by the extension have their query strings removed.
 
 ### Data Perfbase does not collect
 
@@ -364,7 +352,7 @@ Perfbase does not collect:
 - passwords, API keys, nonces, or session IDs from WordPress request, cookie, or session data
 - command-line arguments for process-list snapshots
 
-Database metadata added by the WordPress plugin is limited to aggregate query counts and timing information when available. Native HTTP metadata can include outbound URLs or URIs with query strings. The native profiler may capture additional context depending on enabled Perfbase extension feature flags and application code.
+Database metadata added by the WordPress plugin is limited to aggregate query counts and timing information when available. Outbound URLs recorded by the extension have credentials, query strings and fragments removed. The native profiler may capture additional context depending on enabled Perfbase extension feature flags and application code.
 
 ## Example production setup
 
@@ -375,12 +363,9 @@ define('PERFBASE_ENABLED', true);
 define('PERFBASE_API_KEY', getenv('PERFBASE_API_KEY'));
 define('PERFBASE_SAMPLE_RATE', 0.02);
 define('PERFBASE_TIMEOUT', 5);
-define(
-    'PERFBASE_FLAGS',
-    \Perfbase\SDK\FeatureFlags::UseCoarseClock |
-    \Perfbase\SDK\FeatureFlags::TrackCpuTime |
-    \Perfbase\SDK\FeatureFlags::TrackPdo
-);
+// TrackPdo | TrackCaches | TrackHttp — integers, because wp-config.php
+// loads before the plugin's autoloader.
+define('PERFBASE_FLAGS', 51200);
 ```
 
 That gives you low overhead while still capturing a useful stream of production traces.
@@ -418,8 +403,8 @@ Check these first:
 To reduce overhead:
 
 - lower `sample_rate`
-- use `UseCoarseClock`
-- disable feature flags you do not need
+- leave `TrackCpuTime` and `TrackMemoryAllocation` off
+- disable other feature flags you do not need
 - avoid profiling admin traffic unless you need it
 - narrow your include filters
 

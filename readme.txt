@@ -2,7 +2,7 @@
 Contributors: perfbaseorg
 Tags: performance, profiling, apm, monitoring, woocommerce
 Requires at least: 5.3
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: trunk
 License: GPL-2.0-or-later
@@ -25,7 +25,7 @@ The plugin can profile:
 * WP-CLI commands when enabled.
 * WordPress, theme, plugin, REST, and WooCommerce context when available.
 
-For privacy and cardinality control, request URLs are stored without query strings. Important WordPress query parameters are stored separately where useful.
+Request URLs keep their query string, because it often identifies the operation being profiled, but the values of credential-looking parameters (tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, and password-reset keys and logins) are replaced with REDACTED. Action names never include the query string, and important WordPress query parameters are also stored separately.
 
 == External Services ==
 
@@ -42,8 +42,8 @@ Perfbase can send:
 * Native trace payloads: function call trees, function names, source file paths and line numbers, timing, CPU, memory, host resource metrics, call context, and runtime error or exception context.
 * System/resource data: host operating system, kernel, hostname, CPU architecture, CPU details, disk capacity details, memory usage, CPU usage, disk I/O, and network I/O samples.
 * Process-list tracking when enabled: capped process snapshots with process ID, executable basename, OS user, CPU usage, memory usage, and process runtime. Command-line arguments are not included in process snapshots.
-* Additional native trace metadata: normalized SQL query text and query type, database DSN/host/database/username/port metadata, MongoDB or Elasticsearch query/filter payload summaries, Redis or Memcached keys and fields, HTTP URL or URI metadata that may include query strings depending on the PHP API or HTTP library used, HTTP method/status/timing/byte-count metadata, file paths and file operation metadata, mail recipient and subject metadata, shell/process command strings, AWS operation names, OPcache and JIT statistics, PHP error or exception samples, compiled file paths, magic method counts, and truncated function argument values if argument capture is separately configured.
-* WordPress request metadata: action name, HTTP method, request URL without query string, HTTP status code, user IP address, user agent, logged-in user ID when available, hostname, environment, application version, PHP version, WordPress version, and Perfbase plugin version.
+* Additional native trace metadata: normalized SQL query text with literal values replaced by placeholders, and query type; database DSN driver/host/port/database name with credentials and other parameters masked; MongoDB or Elasticsearch query/filter structure with every value masked; Redis or Memcached keys and fields; outbound HTTP URLs with user credentials, query strings and fragments removed; HTTP method/status/timing/byte-count metadata; file paths (credentials and query strings removed) and file operation metadata; mail recipient domain and subject length (never the full address or subject); the program name and command length of shell/process calls (never the full command line); AWS operation names; OPcache statistics; PHP error or exception samples with stack traces removed and credential-like values, quoted SQL values and URL query strings masked; compiled file paths; and magic method counts. Function argument values are not captured.
+* WordPress request metadata: action name, HTTP method, request URL including its query string, with the values of credential-looking parameters (such as tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, and password-reset keys and logins) replaced by REDACTED, HTTP status code, user IP address, user agent, logged-in user ID when available, hostname, environment, application version, PHP version, WordPress version, and Perfbase plugin version.
 * WordPress context metadata: AJAX action, REST route, admin page, post/page identifiers, post type/status, taxonomy context, template and theme information, conditional page type flags, plugin lifecycle context, and WooCommerce page, cart, product, or order context when available.
 * Operational summaries: memory usage, database query count and timing summaries when available, and sanitized outbound HTTP request metadata when HTTP tracking is enabled.
 
@@ -56,7 +56,7 @@ Perfbase does not collect:
 * Passwords, API keys, nonces, or session IDs from WordPress request, cookie, or session data.
 * Command-line arguments for process-list snapshots.
 
-Feature flags control the extra native trace metadata listed under "Perfbase can send", including outbound HTTP URLs or URIs with query strings for some HTTP libraries and truncated function argument values if argument capture is separately configured. Administrators should review enabled Perfbase extension feature flags before profiling sensitive workloads.
+Feature flags control which of the extra native trace metadata listed under "Perfbase can send" is collected. Administrators should review enabled Perfbase extension feature flags before profiling sensitive workloads.
 
 Extension installer and CDN: the plugin runtime does not call `cdn.perfbase.com`. The optional extension installer and manual extension binary downloads use `https://cdn.perfbase.com` only when a server administrator downloads or runs those installation assets.
 
@@ -136,7 +136,7 @@ Yes. Perfbase is a SaaS APM platform and trace submission requires a Perfbase AP
 
 = What data is sent to Perfbase? =
 
-When enabled, the plugin sends profiling traces and request metadata such as action name, HTTP method, sanitized request URL without query string, HTTP status code, user agent, user IP address, hostname, environment, WordPress version, PHP version, and selected WordPress context.
+When enabled, the plugin sends profiling traces and request metadata such as action name, HTTP method, sanitized request URL including its query string, with the values of credential-looking parameters (such as tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, and password-reset keys and logins) replaced by REDACTED, HTTP status code, user agent, user IP address, hostname, environment, WordPress version, PHP version, and selected WordPress context.
 
 See the External Services section for the full data disclosure. The key distinction is that Perfbase does not collect source code, request bodies, full POST payloads, arbitrary form fields, uploaded file contents, cookie values, PHP session data, or authorization header values.
 
@@ -156,7 +156,12 @@ Administrators should review their site's privacy policy and disclose their use 
 
 = Unreleased =
 
-* Tagged Perfbase WordPress plugin release.
+* Supports PHP 8.5 and 8.6, and is tested up to WordPress 7.1.
+* The minimum WordPress version check now matches the declared requirement (5.3).
+* Settings: removed feature flags that never had any effect (wall time, arguments, file definitions, sessions, serialization, regex) and added stream error tracking (PHP 8.6+).
+* Outbound HTTP request metadata is now recorded when the extension's default feature set is selected.
+* Request URLs now keep their query string, with credential-looking parameters (tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, password-reset keys and logins) redacted.
+* Requires Perfbase PHP SDK 1.9.
 * Built with production Composer dependencies and tag-synced plugin metadata.
 
 == Upgrade Notice ==

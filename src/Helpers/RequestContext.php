@@ -6,6 +6,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Perfbase\SDK\Utils\UrlSanitizer;
+
 /**
  * Handles WordPress request context detection and attribute collection
  */
@@ -17,6 +19,14 @@ class RequestContext
     private const MAX_USER_AGENT_LENGTH = 512;
     private const MAX_QUERY_VALUE_LENGTH = 512;
     private const MAX_QUERY_KEY_LENGTH = 128;
+    private const MAX_QUERY_STRING_LENGTH = 2048;
+
+    /**
+     * WordPress-specific query parameters redacted on top of the SDK's
+     * defaults: password-reset links carry the reset `key` and the user's
+     * `login` (wp-login.php?action=rp&key=...&login=...).
+     */
+    private const WORDPRESS_SENSITIVE_QUERY_PARAMS = ['key', 'login'];
     private const MAX_APP_VERSION_LENGTH = 64;
 
     /**
@@ -354,10 +364,33 @@ class RequestContext
             return $protocol . $host;
         }
 
-        // Strip query string to avoid leaking sensitive params
         $path = $this->extractRequestPath($uri);
+        $query = $this->extractQueryString($uri);
 
-        return $protocol . $host . $path;
+        // Keep the query string (custom endpoints are often identified by it,
+        // e.g. ?method=example) but redact credential-looking parameters.
+        return UrlSanitizer::sanitize(
+            $protocol . $host . $path . ($query === '' ? '' : '?' . $query),
+            self::WORDPRESS_SENSITIVE_QUERY_PARAMS
+        );
+    }
+
+    /**
+     * Raw query string of a request URI, limited to URL-safe characters.
+     *
+     * @param string $requestUri
+     * @return string
+     */
+    private function extractQueryString(string $requestUri): string
+    {
+        $query = wp_parse_url($requestUri, PHP_URL_QUERY);
+        if (!is_string($query) || $query === '') {
+            return '';
+        }
+
+        $query = preg_replace('/[^A-Za-z0-9\-._~!$&\'()*+,;=:@\/%?\[\]]/', '', $query);
+
+        return is_string($query) ? $this->truncate($query, self::MAX_QUERY_STRING_LENGTH) : '';
     }
 
     /**

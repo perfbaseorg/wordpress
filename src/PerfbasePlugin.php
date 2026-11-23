@@ -351,13 +351,31 @@ class PerfbasePlugin {
      */
     public function on_http_request($preempt, $args, string $url)
     {
-        if ($this->perfbase && ($this->config['flags'] & FeatureFlags::TrackHttp)) {
+        if ($this->perfbase && $this->isFeatureEnabled(FeatureFlags::TrackHttp)) {
             $sanitizedUrl = $this->sanitizeExternalUrl($url);
             if ($sanitizedUrl !== null) {
                 $this->perfbase->setAttribute('http.external_request', $sanitizedUrl);
             }
         }
         return $preempt;
+    }
+
+    /**
+     * Whether a regular (non opt-in) feature is active under the configured mask.
+     *
+     * Mirrors the extension: a mask with no regular flags (0, or only the
+     * opt-in UsePreciseClock / TrackCpuTime) means the default feature set,
+     * which contains every regular flag; otherwise the mask is exact.
+     *
+     * @param int $flag
+     * @return bool
+     */
+    private function isFeatureEnabled(int $flag): bool
+    {
+        $flags = (int) ($this->config['flags'] ?? 0);
+        $regularFlags = $flags & ~(FeatureFlags::UsePreciseClock | FeatureFlags::TrackCpuTime);
+
+        return $regularFlags === 0 || ($flags & $flag) !== 0;
     }
 
     /**

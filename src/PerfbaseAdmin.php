@@ -866,22 +866,20 @@ class PerfbaseAdmin {
         $config = $this->plugin->get_config();
         $current_flags = (int) ($config['flags'] ?? FeatureFlags::DefaultFlags);
 
+        // Only flags the extension honours. The SDK's deprecated constants
+        // (TrackWallTime, TrackArguments, TrackFileDefinitions, TrackSessions,
+        // TrackSerialization, TrackRegex) map to reserved bits and do nothing.
         $flag_groups = [
             __('Timing and runtime', 'perfbase') => [
                 FeatureFlags::UsePreciseClock => __('Use Precise Clock', 'perfbase'),
-                FeatureFlags::TrackWallTime => __('Track Wall Time', 'perfbase'),
                 FeatureFlags::TrackCpuTime => __('Track CPU Time', 'perfbase'),
                 FeatureFlags::TrackMemoryAllocation => __('Track Memory Allocation', 'perfbase'),
                 FeatureFlags::TrackOpcache => __('Track OPcache Stats', 'perfbase'),
             ],
             __('Application behavior', 'perfbase') => [
-                FeatureFlags::TrackArguments => __('Track Function Arguments', 'perfbase'),
                 FeatureFlags::TrackExceptions => __('Track Exceptions', 'perfbase'),
                 FeatureFlags::TrackErrors => __('Track PHP Errors', 'perfbase'),
                 FeatureFlags::TrackMagicMethods => __('Track Magic Methods', 'perfbase'),
-                FeatureFlags::TrackSessions => __('Track Sessions', 'perfbase'),
-                FeatureFlags::TrackSerialization => __('Track Serialization', 'perfbase'),
-                FeatureFlags::TrackRegex => __('Track Regex Operations', 'perfbase'),
             ],
             __('Integrations', 'perfbase') => [
                 FeatureFlags::TrackPdo => __('Track Database Operations', 'perfbase'),
@@ -893,8 +891,8 @@ class PerfbaseAdmin {
             ],
             __('Files and processes', 'perfbase') => [
                 FeatureFlags::TrackFileCompilation => __('Track File Compilation', 'perfbase'),
-                FeatureFlags::TrackFileDefinitions => __('Track File Definitions', 'perfbase'),
                 FeatureFlags::TrackFileOperations => __('Track File Operations', 'perfbase'),
+                FeatureFlags::TrackStreams => __('Track Stream Errors (PHP 8.6+)', 'perfbase'),
                 FeatureFlags::TrackProc => __('Track Process Execution', 'perfbase'),
                 FeatureFlags::TrackProcessList => __('Track Process List', 'perfbase'),
             ],
@@ -919,7 +917,10 @@ class PerfbaseAdmin {
         echo '</div>';
 
         echo '<p class="description">';
-        esc_html_e('Some capabilities may increase profiling overhead on busy sites.', 'perfbase');
+        esc_html_e('Some capabilities may increase profiling overhead on busy sites. CPU time and memory tracking cost the most.', 'perfbase');
+        echo '</p>';
+        echo '<p class="description">';
+        esc_html_e('Leaving every box unchecked uses the extension default: everything except Precise Clock and CPU Time.', 'perfbase');
         echo '</p>';
     }
 

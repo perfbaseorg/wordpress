@@ -553,6 +553,20 @@ class PerfbaseAdminTest extends BaseWordPressTest
         $this->assertStringContainsString('Files and processes', $output);
     }
 
+    public function testRenderFlagsFieldOffersOnlyFlagsTheExtensionHonours()
+    {
+        ob_start();
+        $this->admin->render_flags_field();
+        $output = ob_get_clean();
+
+        $this->assertStringContainsString('value="' . FeatureFlags::TrackStreams . '"', $output);
+        $this->assertStringContainsString('value="' . FeatureFlags::TrackOpcache . '"', $output);
+
+        foreach ([1 << 1, 1 << 4, 1 << 7, 1 << 8, 1 << 9, 1 << 10] as $reservedBit) {
+            $this->assertStringNotContainsString('value="' . $reservedBit . '"', $output);
+        }
+    }
+
     public function testRenderTimeoutFieldHasValidation()
     {
         Functions\when('esc_attr')->returnArg();

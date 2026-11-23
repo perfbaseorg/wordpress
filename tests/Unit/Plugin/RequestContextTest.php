@@ -144,7 +144,7 @@ class RequestContextTest extends BaseWordPressTest
         $attributes = $this->request_context->getRequestAttributes();
 
         $this->assertEquals('POST /wp-json/', $attributes['action']);
-        $this->assertEquals('https://example.com/wp-json/', $attributes['http_url']);
+        $this->assertEquals('https://example.com/wp-json/?rest_route=/wp/v2/posts&action=heartbeat', $attributes['http_url']);
         $this->assertEquals('Browser/1.0', $attributes['user_agent']);
         $this->assertEquals('/wp/v2/posts', $attributes['wordpress.rest_route']);
         $this->assertEquals('heartbeat', $attributes['wordpress.ajax_action']);
@@ -175,7 +175,7 @@ class RequestContextTest extends BaseWordPressTest
 
         $this->assertEquals('GET /checkout/alert(1)', $attributes['action']);
         $this->assertEquals('GET', $attributes['http_method']);
-        $this->assertEquals('http://evil.comX-Bad:yes/checkout/alert(1)', $attributes['http_url']);
+        $this->assertEquals('http://evil.comX-Bad:yes/checkout/alert(1)?token=REDACTED', $attributes['http_url']);
         $this->assertSame(512, strlen($attributes['user_agent']));
         $this->assertStringNotContainsString("\r", $attributes['user_agent']);
         $this->assertStringNotContainsString('<script>', $attributes['user_agent']);
@@ -362,8 +362,34 @@ class RequestContextTest extends BaseWordPressTest
 
         $url = $this->request_context->getCurrentUrl();
 
-        // getCurrentUrl() now strips query strings
-        $this->assertEquals('http://example.com/test-page/', $url);
+        // Query strings are kept; only credential-looking parameters are redacted.
+        $this->assertEquals('http://example.com/test-page/?param=value', $url);
+    }
+
+    public function testGetCurrentUrlRedactsCredentialParameters()
+    {
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['REQUEST_URI'] = '/ajax.php?method=example&access_token=abc123&user%5Bpassword%5D=hunter2&page=2#frag';
+
+        Functions\when('is_ssl')->justReturn(true);
+
+        $this->assertEquals(
+            'https://example.com/ajax.php?method=example&access_token=REDACTED&user%5Bpassword%5D=REDACTED&page=2',
+            $this->request_context->getCurrentUrl()
+        );
+    }
+
+    public function testGetCurrentUrlRedactsPasswordResetKeyAndNonce()
+    {
+        $_SERVER['HTTP_HOST'] = 'example.com';
+        $_SERVER['REQUEST_URI'] = '/wp-login.php?action=rp&key=AbCdEf123&login=bob&_wpnonce=9f8e7d';
+
+        Functions\when('is_ssl')->justReturn(true);
+
+        $this->assertEquals(
+            'https://example.com/wp-login.php?action=rp&key=REDACTED&login=REDACTED&_wpnonce=REDACTED',
+            $this->request_context->getCurrentUrl()
+        );
     }
 
     public function testGetCurrentUrlHttps()
@@ -516,8 +542,8 @@ class RequestContextTest extends BaseWordPressTest
 
         // Action should NOT include query parameters
         $this->assertEquals('POST /wp-cron.php', $attributes['action']);
-        // http_url also strips query strings now (getCurrentUrl strips them)
-        $this->assertEquals('http://example.com/wp-cron.php', $attributes['http_url']);
+        // http_url keeps the query string (action is the low-cardinality field)
+        $this->assertEquals('http://example.com/wp-cron.php?doing_wp_cron=1760930969.8033809661865234375000', $attributes['http_url']);
     }
 
     public function testGetRequestAttributesExtractsAjaxAction()
