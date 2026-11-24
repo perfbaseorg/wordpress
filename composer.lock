@@ -4,25 +4,25 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3f397ec3cabba49a4cbebea3ca8cabbe",
+    "content-hash": "ba97151bf6f24587f3bfcb00b0aec257",
     "packages": [
         {
             "name": "perfbase/php-sdk",
-            "version": "v1.8.0",
+            "version": "v1.9.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/perfbaseorg/php-sdk.git",
-                "reference": "1867e9eecd76a0e4a98000dd2ba2ce1a40d650e8"
+                "reference": "ab53a05dfe705a6033f656a2e734a4f513f3a12e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/perfbaseorg/php-sdk/zipball/1867e9eecd76a0e4a98000dd2ba2ce1a40d650e8",
-                "reference": "1867e9eecd76a0e4a98000dd2ba2ce1a40d650e8",
+                "url": "https://api.github.com/repos/perfbaseorg/php-sdk/zipball/ab53a05dfe705a6033f656a2e734a4f513f3a12e",
+                "reference": "ab53a05dfe705a6033f656a2e734a4f513f3a12e",
                 "shasum": ""
             },
             "require": {
                 "ext-curl": "*",
-                "php": ">=7.4 <8.6"
+                "php": ">=7.4 <8.7"
             },
             "require-dev": {
                 "mockery/mockery": "^1.6",
@@ -56,7 +56,8 @@
                 "issues": "https://github.com/perfbaseorg/php-sdk/issues",
                 "source": "https://github.com/perfbaseorg/php-sdk"
             },
-            "time": "2026-05-11T14:26:54+00:00"
+            "time": "2026-11-24T08:48:04+00:00",
+            "published-time": "2026-11-24T08:49:35+00:00"
         }
     ],
     "packages-dev": [
@@ -2639,7 +2640,7 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=7.4 <8.5",
+        "php": ">=7.4 <8.7",
         "ext-curl": "*",
         "ext-json": "*"
     },
@@ -2647,5 +2648,5 @@
     "platform-overrides": {
         "php": "7.4.33"
     },
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.11.0"
 }
