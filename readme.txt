@@ -167,6 +167,7 @@ Administrators should review their site's privacy policy and disclose their use 
 * The PERFBASE_ENVIRONMENT constant now sets the environment trace attribute on WordPress 5.5 and newer. It was previously ignored there.
 * The theme setup, active plugin count and WooCommerce version attributes are now included in traces. They were collected before profiling started, which silently discarded them.
 * WooCommerce page and product context is now recorded. It was read before WordPress had determined which page was being displayed.
+* A missing vendor directory no longer causes a fatal error on every page. The plugin now shows an admin notice instead.
 
 == Upgrade Notice ==
 

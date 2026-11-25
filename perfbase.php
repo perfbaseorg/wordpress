@@ -74,7 +74,9 @@ function perfbase_init() {
     try {
         $plugin = new Perfbase\WordPress\PerfbasePlugin();
         $plugin->init();
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
+        // Throwable, not Exception: a missing or broken vendor/ directory
+        // surfaces as an Error, and that must not take the site down.
         add_action('admin_notices', function() use ($e) {
             echo '<div class="notice notice-error"><p>';
             printf(
@@ -115,7 +117,13 @@ function perfbase_activate() {
         ));
     }
 
-    // Create default options
+    // Create default options. Activation must not fail when the plugin's
+    // classes cannot be loaded: the settings fall back to the built-in
+    // defaults, and perfbase_init() reports the reason in the admin area.
+    if (!class_exists(Perfbase\WordPress\Helpers\ConfigManager::class)) {
+        return;
+    }
+
     $defaults = (new Perfbase\WordPress\Helpers\ConfigManager())->getDefaultConfig();
     add_option('perfbase_settings', $defaults);
 }
