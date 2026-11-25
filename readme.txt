@@ -165,6 +165,7 @@ Administrators should review their site's privacy policy and disclose their use 
 * Built with production Composer dependencies and tag-synced plugin metadata.
 * Turning off the AJAX or cron profiling toggle now stops those requests being profiled. They were previously still recorded through the HTTP request lifecycle.
 * The PERFBASE_ENVIRONMENT constant now sets the environment trace attribute on WordPress 5.5 and newer. It was previously ignored there.
+* The theme setup, active plugin count and WooCommerce version attributes are now included in traces. They were collected before profiling started, which silently discarded them.
 
 == Upgrade Notice ==
 

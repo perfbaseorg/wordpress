@@ -4,6 +4,7 @@ namespace Perfbase\WordPress\Tests\Unit\Plugin;
 
 use Brain\Monkey\Functions;
 use Mockery;
+use Perfbase\SDK\Perfbase;
 use Perfbase\WordPress\PerfbaseProfiler;
 use Perfbase\WordPress\PerfbasePlugin;
 use Perfbase\WordPress\Tests\Helpers\BaseWordPressTest;
@@ -122,18 +123,19 @@ class PerfbaseProfilerTest extends BaseWordPressTest
         $this->addToAssertionCount(1);
     }
 
-    public function testProfileThemeSetup()
+    /**
+     * after_setup_theme fires before the trace span starts, where
+     * perfbase_set_attribute() is a no-op, so nothing may be written yet.
+     */
+    public function testProfileThemeSetupWritesNothingBeforeShutdown()
     {
-        $this->mock_perfbase
-            ->shouldReceive('setAttribute')
-            ->with('wordpress.theme_setup', 'completed')
-            ->once();
+        $this->mock_perfbase->shouldNotReceive('setAttribute');
 
         $this->profiler->profile_theme_setup();
         $this->addToAssertionCount(1);
     }
 
-    public function testProfilePluginsLoaded()
+    public function testEarlyAttributesAreWrittenAtShutdown()
     {
         Functions\when('get_option')->alias(function ($option, $default = []) {
             if ($option === 'active_plugins') {
@@ -149,6 +151,11 @@ class PerfbaseProfilerTest extends BaseWordPressTest
 
         $this->mock_perfbase
             ->shouldReceive('setAttribute')
+            ->with('wordpress.theme_setup', 'completed')
+            ->once();
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
             ->with('wordpress.plugins.count', '3')
             ->once();
 
@@ -157,7 +164,23 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->with('wordpress.plugins_loaded', 'completed')
             ->once();
 
+        $this->profiler->profile_theme_setup();
         $this->profiler->profile_plugins_loaded();
+        $this->profiler->add_database_stats();
+        $this->addToAssertionCount(1);
+    }
+
+    public function testPluginsCountTreatsNonArrayOptionAsEmpty()
+    {
+        Functions\when('get_option')->justReturn(false);
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('wordpress.plugins.count', '0')
+            ->once();
+
+        $this->profiler->profile_plugins_loaded();
+        $this->profiler->add_database_stats();
         $this->addToAssertionCount(1);
     }
 
@@ -283,6 +306,16 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             eval('function WC() { return null; }');
         }
 
+        // The plugin boots on plugins_loaded, before the trace span starts, so
+        // constructing the profiler must not write anything yet.
+        $spy_perfbase = Mockery::spy(Perfbase::class);
+        $spy_plugin = Mockery::mock(PerfbasePlugin::class);
+        $spy_plugin->shouldReceive('get_perfbase')->andReturn($spy_perfbase);
+
+        new PerfbaseProfiler($spy_plugin);
+
+        $spy_perfbase->shouldNotHaveReceived('setAttribute');
+
         $this->mock_perfbase
             ->shouldReceive('setAttribute')
             ->with('woocommerce.active', 'true')
@@ -293,6 +326,38 @@ class PerfbaseProfilerTest extends BaseWordPressTest
             ->with('woocommerce.version', Mockery::any());
 
         $profiler = new PerfbaseProfiler($this->mock_plugin);
+
+        $profiler->add_database_stats();
+
+        $this->assertInstanceOf(PerfbaseProfiler::class, $profiler);
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testWooCommerceVersionIsWrittenAtShutdown()
+    {
+        eval('class PerfbaseTestWooCommerceStub {}');
+        class_alias('PerfbaseTestWooCommerceStub', 'WooCommerce');
+
+        $woocommerce = new \stdClass();
+        $woocommerce->version = '9.8.1';
+        $GLOBALS['perfbase_test_woocommerce'] = $woocommerce;
+        eval('function WC() { return $GLOBALS["perfbase_test_woocommerce"]; }');
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.active', 'true')
+            ->once();
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.version', '9.8.1')
+            ->once();
+
+        $profiler = new PerfbaseProfiler($this->mock_plugin);
+        $profiler->add_database_stats();
 
         $this->assertInstanceOf(PerfbaseProfiler::class, $profiler);
     }

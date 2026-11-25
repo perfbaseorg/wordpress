@@ -31,6 +31,17 @@ class PerfbaseProfiler {
     private $context = [];
 
     /**
+     * Attributes collected before the trace span exists.
+     *
+     * perfbase_set_attribute() does nothing until a span has been enabled, and
+     * plugins_loaded and after_setup_theme both run before the span starts on
+     * init. These values are written to the SDK at shutdown instead.
+     *
+     * @var array<string, string>
+     */
+    private $deferredAttributes = [];
+
+    /**
      * Constructor
      *
      * @param PerfbasePlugin $plugin
@@ -106,7 +117,8 @@ class PerfbaseProfiler {
     }
 
     /**
-     * Add database statistics
+     * Add database statistics, and write the attributes that were collected
+     * before the trace span started.
      *
      * @return void
      */
@@ -114,6 +126,10 @@ class PerfbaseProfiler {
         $perfbase = $this->plugin->get_perfbase();
         if (!$perfbase) {
             return;
+        }
+
+        foreach ($this->deferredAttributes as $key => $value) {
+            $perfbase->setAttribute($key, $value);
         }
 
         global $wpdb;
@@ -146,12 +162,9 @@ class PerfbaseProfiler {
      * @return void
      */
     public function profile_theme_setup() {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
-        $perfbase->setAttribute('wordpress.theme_setup', 'completed');
+        // after_setup_theme fires before the trace span starts, so the value
+        // is held back for shutdown.
+        $this->deferAttribute('wordpress.theme_setup', 'completed');
     }
 
     /**
@@ -160,14 +173,22 @@ class PerfbaseProfiler {
      * @return void
      */
     public function profile_plugins_loaded() {
-        $perfbase = $this->plugin->get_perfbase();
-        if (!$perfbase) {
-            return;
-        }
-
+        // plugins_loaded also fires before the trace span starts.
         $active_plugins = get_option('active_plugins', []);
-        $perfbase->setAttribute('wordpress.plugins.count', (string) count($active_plugins));
-        $perfbase->setAttribute('wordpress.plugins_loaded', 'completed');
+
+        $this->deferAttribute('wordpress.plugins.count', (string) (is_array($active_plugins) ? count($active_plugins) : 0));
+        $this->deferAttribute('wordpress.plugins_loaded', 'completed');
+    }
+
+    /**
+     * Hold an attribute until the trace span exists.
+     *
+     * @param string $key
+     * @param string $value
+     * @return void
+     */
+    private function deferAttribute(string $key, string $value) {
+        $this->deferredAttributes[$key] = $value;
     }
 
     /**
@@ -270,11 +291,12 @@ class PerfbaseProfiler {
             return;
         }
 
-        $perfbase->setAttribute('woocommerce.active', 'true');
+        // This runs on plugins_loaded, before the trace span starts.
+        $this->deferAttribute('woocommerce.active', 'true');
         if (function_exists('WC')) {
             $woocommerce = WC();
             if (is_object($woocommerce) && isset($woocommerce->version) && is_string($woocommerce->version)) {
-                $perfbase->setAttribute('woocommerce.version', $woocommerce->version);
+                $this->deferAttribute('woocommerce.version', $woocommerce->version);
             }
         }
 
