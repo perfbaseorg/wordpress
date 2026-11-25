@@ -34,7 +34,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
 
       - name: Cache composer dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -44,7 +44,7 @@ jobs:
         run: bash -c "$(curl -fsSL https://cdn.perfbase.com/install.sh)"
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
 
       - name: Run PHPUnit tests
         run: ./vendor/bin/phpunit --coverage-clover coverage.xml
@@ -73,7 +73,7 @@ jobs:
           tools: composer:v2
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
 
       - name: Run PHPStan
         run: composer phpstan
