@@ -164,6 +164,7 @@ Administrators should review their site's privacy policy and disclose their use 
 * Requires Perfbase PHP SDK 1.9.
 * Built with production Composer dependencies and tag-synced plugin metadata.
 * Turning off the AJAX or cron profiling toggle now stops those requests being profiled. They were previously still recorded through the HTTP request lifecycle.
+* The PERFBASE_ENVIRONMENT constant now sets the environment trace attribute on WordPress 5.5 and newer. It was previously ignored there.
 
 == Upgrade Notice ==
 

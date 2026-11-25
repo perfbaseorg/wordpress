@@ -203,14 +203,16 @@ class RequestContext
      */
     private function getEnvironment(): string
     {
+        // An explicit Perfbase constant wins. wp_get_environment_type() exists
+        // on every supported release since 5.5, so checking it first made
+        // PERFBASE_ENVIRONMENT a no-op on all of them.
+        if (defined('PERFBASE_ENVIRONMENT')) {
+            return PERFBASE_ENVIRONMENT;
+        }
+
         // Check for WP_ENVIRONMENT_TYPE (WordPress 5.5+)
         if (function_exists('wp_get_environment_type')) {
             return wp_get_environment_type();
-        }
-
-        // Check for custom constant
-        if (defined('PERFBASE_ENVIRONMENT')) {
-            return PERFBASE_ENVIRONMENT;
         }
 
         // Check for WP_DEBUG as fallback

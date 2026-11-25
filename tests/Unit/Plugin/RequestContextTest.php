@@ -675,6 +675,31 @@ class RequestContextTest extends BaseWordPressTest
         $this->assertEquals('development', $attributes['environment']);
     }
 
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testGetRequestAttributesEnvironmentPrefersPerfbaseConstant()
+    {
+        define('PERFBASE_ENVIRONMENT', 'staging');
+
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/';
+        $_SERVER['HTTP_HOST'] = 'example.com';
+
+        Functions\when('is_ssl')->justReturn(false);
+        Functions\when('get_bloginfo')->justReturn('6.0');
+        Functions\when('is_user_logged_in')->justReturn(false);
+        Functions\when('get_query_var')->justReturn(0);
+        Functions\when('wp_get_environment_type')->justReturn('production');
+        Functions\when('gethostname')->justReturn('webserver-01');
+        Functions\when('phpversion')->justReturn('8.2.0');
+
+        $attributes = $this->request_context->getRequestAttributes();
+
+        $this->assertEquals('staging', $attributes['environment']);
+    }
+
     public function testGetRequestAttributesAppVersionDefault()
     {
         $_SERVER['REQUEST_METHOD'] = 'GET';
