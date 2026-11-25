@@ -300,8 +300,10 @@ class PerfbaseProfiler {
             }
         }
 
-        // Profile WooCommerce specific pages
-        add_action('woocommerce_init', function() {
+        // Profile WooCommerce specific pages. The conditional tags read the
+        // main query, which does not exist while init runs, so the check has
+        // to wait for template_redirect.
+        add_action('template_redirect', function() {
             $perfbase = $this->plugin->get_perfbase();
             if (!$perfbase) {
                 return;

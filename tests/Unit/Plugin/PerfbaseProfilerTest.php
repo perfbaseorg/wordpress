@@ -361,4 +361,95 @@ class PerfbaseProfilerTest extends BaseWordPressTest
 
         $this->assertInstanceOf(PerfbaseProfiler::class, $profiler);
     }
+
+    /**
+     * Build the profiler with WooCommerce present and return every callback
+     * it registered, grouped by hook name.
+     *
+     * @return array<string, array<int, callable>>
+     */
+    private function captureWooCommerceHooks(): array
+    {
+        if (!class_exists('WooCommerce')) {
+            if (!class_exists('PerfbaseTestWooCommerceStub', false)) {
+                eval('class PerfbaseTestWooCommerceStub {}');
+            }
+
+            class_alias('PerfbaseTestWooCommerceStub', 'WooCommerce');
+        }
+
+        if (!function_exists('WC')) {
+            eval('function WC() { return null; }');
+        }
+
+        $hooks = [];
+        Functions\when('add_action')->alias(function ($hook, $callback) use (&$hooks) {
+            $hooks[$hook][] = $callback;
+
+            return true;
+        });
+
+        new PerfbaseProfiler($this->mock_plugin);
+
+        return $hooks;
+    }
+
+    public function testWooCommercePageDetectionWaitsForTemplateRedirect()
+    {
+        $hooks = $this->captureWooCommerceHooks();
+
+        // is_shop() and friends read the main query, which does not exist
+        // when woocommerce_init fires on init.
+        $this->assertArrayNotHasKey('woocommerce_init', $hooks);
+        $this->assertCount(1, $hooks['template_redirect']);
+    }
+
+    public function testWooCommerceShopPageIsRecorded()
+    {
+        $hooks = $this->captureWooCommerceHooks();
+
+        Functions\when('is_shop')->justReturn(true);
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.page', 'shop')
+            ->once();
+
+        foreach ($hooks['template_redirect'] as $callback) {
+            $callback();
+        }
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testWooCommerceProductPageIsRecorded()
+    {
+        $hooks = $this->captureWooCommerceHooks();
+
+        Functions\when('is_shop')->justReturn(false);
+        Functions\when('is_product')->justReturn(true);
+        Functions\when('wc_get_product')
+            ->justReturn(MockFactory::createMockWooCommerceProduct(['id' => 7, 'type' => 'variable']));
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.page', 'product')
+            ->once();
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.product.id', '7')
+            ->once();
+
+        $this->mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->with('woocommerce.product.type', 'variable')
+            ->once();
+
+        foreach ($hooks['template_redirect'] as $callback) {
+            $callback();
+        }
+
+        $this->addToAssertionCount(1);
+    }
 }
