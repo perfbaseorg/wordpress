@@ -269,32 +269,38 @@ class PerfbasePlugin {
     /**
      * Detect the current WordPress context and create the appropriate lifecycle.
      *
-     * @return AbstractWordPressProfiler|null
+     * @return AbstractWordPressProfiler|null Null when the context is not profiled
      */
-	    private function createLifecycleForContext(): ?AbstractWordPressProfiler
-	    {
+    private function createLifecycleForContext(): ?AbstractWordPressProfiler
+    {
         if (defined('WP_CLI') && WP_CLI && empty($this->config['profile_cli'])) {
             return null;
         }
 
-	        // AJAX requests (detected via DOING_AJAX constant)
-	        if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
-	            return new AjaxRequestLifecycle($this->getAjaxActionName(), $this, $this->request_context);
-	        }
+        // AJAX requests (detected via DOING_AJAX constant)
+        if (defined('DOING_AJAX') && DOING_AJAX && !empty($this->config['profile_ajax'])) {
+            return new AjaxRequestLifecycle($this->getAjaxActionName(), $this, $this->request_context);
+        }
 
         // Cron requests (detected via DOING_CRON constant)
         if (defined('DOING_CRON') && DOING_CRON && !empty($this->config['profile_cron'])) {
             return new CronLifecycle($this);
         }
 
-	        // WP-CLI requests (detected via WP_CLI constant)
-	        if (defined('WP_CLI') && WP_CLI && !empty($this->config['profile_cli'])) {
-	            return new CliLifecycle($this->getCliCommandName(), $this);
-	        }
+        // WP-CLI requests (detected via WP_CLI constant)
+        if (defined('WP_CLI') && WP_CLI && !empty($this->config['profile_cli'])) {
+            return new CliLifecycle($this->getCliCommandName(), $this);
+        }
+
+        // A cron or AJAX run whose toggle is off is not an ordinary page view
+        // either: handing it to the HTTP lifecycle would profile it regardless.
+        if ((defined('DOING_CRON') && DOING_CRON) || (defined('DOING_AJAX') && DOING_AJAX)) {
+            return null;
+        }
 
         // Default: standard HTTP request
-	        return new HttpRequestLifecycle($this, $this->request_context);
-	    }
+        return new HttpRequestLifecycle($this, $this->request_context);
+    }
 
     /**
      * Read the AJAX action name for low-cardinality trace grouping.
@@ -337,7 +343,7 @@ class PerfbasePlugin {
         return $command !== '' ? substr($command, 0, 128) : 'unknown';
     }
 
-	    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
     // Attribute collection hooks (lightweight — set on SDK directly)
     // ------------------------------------------------------------------
 

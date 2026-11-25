@@ -163,6 +163,7 @@ Administrators should review their site's privacy policy and disclose their use 
 * Request URLs now keep their query string, with credential-looking parameters (tokens, passwords, API keys, signatures, nonces, session IDs, email addresses, password-reset keys and logins) redacted.
 * Requires Perfbase PHP SDK 1.9.
 * Built with production Composer dependencies and tag-synced plugin metadata.
+* Turning off the AJAX or cron profiling toggle now stops those requests being profiled. They were previously still recorded through the HTTP request lifecycle.
 
 == Upgrade Notice ==
 

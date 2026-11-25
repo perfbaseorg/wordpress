@@ -250,6 +250,175 @@ class PerfbasePluginTest extends BaseWordPressTest
         $this->assertNull($this->plugin->get_active_lifecycle());
     }
 
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitCreatesAjaxLifecycleThroughContextDetection()
+    {
+        if (!defined('DOING_AJAX')) {
+            define('DOING_AJAX', true);
+        }
+
+        $_POST['action'] = 'test_action';
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_ajax'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('ajax');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(AjaxRequestLifecycle::class, $lifecycle);
+        $this->assertSame('ajax', $lifecycle->getSpanName());
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitSkipsAjaxWhenAjaxProfilingIsDisabled()
+    {
+        if (!defined('DOING_AJAX')) {
+            define('DOING_AJAX', true);
+        }
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_ajax'] = false;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase->shouldNotReceive('isExtensionAvailable');
+        $mock_perfbase->shouldNotReceive('startTraceSpan');
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitCreatesCronLifecycleThroughContextDetection()
+    {
+        if (!defined('DOING_CRON')) {
+            define('DOING_CRON', true);
+        }
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_cron'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('cron');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(CronLifecycle::class, $lifecycle);
+        $this->assertSame('cron', $lifecycle->getSpanName());
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitSkipsCronWhenCronProfilingIsDisabled()
+    {
+        if (!defined('DOING_CRON')) {
+            define('DOING_CRON', true);
+        }
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_cron'] = false;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase->shouldNotReceive('isExtensionAvailable');
+        $mock_perfbase->shouldNotReceive('startTraceSpan');
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $this->assertNull($this->plugin->get_active_lifecycle());
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testOnInitCreatesCronLifecycleForWpCliCronRunWhenBothEnabled()
+    {
+        // `wp cron event run` defines both WP_CLI and DOING_CRON.
+        define('WP_CLI', true);
+        define('DOING_CRON', true);
+
+        $config = TestData::getValidConfig();
+        $config['sample_rate'] = 1.0;
+        $config['profile_cli'] = true;
+        $config['profile_cron'] = true;
+        $mock_perfbase = MockFactory::createMockPerfbase();
+
+        $mock_perfbase
+            ->shouldReceive('isExtensionAvailable')
+            ->andReturn(true);
+
+        $mock_perfbase
+            ->shouldReceive('startTraceSpan')
+            ->once()
+            ->with('cron');
+
+        $mock_perfbase
+            ->shouldReceive('setAttribute')
+            ->zeroOrMoreTimes();
+
+        $this->setPrivateProperty($this->plugin, 'perfbase', $mock_perfbase);
+        $this->setPrivateProperty($this->plugin, 'config', $config);
+
+        $this->plugin->on_init();
+
+        $lifecycle = $this->plugin->get_active_lifecycle();
+        $this->assertInstanceOf(CronLifecycle::class, $lifecycle);
+        $this->assertSame('cron', $lifecycle->getSpanName());
+    }
+
     public function testOnInitWithExceptionHandledGracefully()
     {
         $config = TestData::getValidConfig();
